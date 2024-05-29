@@ -133,7 +133,10 @@ impl MathFragment {
 
     pub fn is_text_like(&self) -> bool {
         match self {
-            Self::Glyph(_) | Self::Variant(_) => self.class() != MathClass::Large,
+            Self::Glyph(_) => self.class() != MathClass::Large,
+            Self::Variant(variant) => {
+                self.class() != MathClass::Large && !variant.stretched
+            }
             MathFragment::Frame(frame) => frame.text_like,
             _ => false,
         }
@@ -335,6 +338,7 @@ impl GlyphFragment {
             limits: self.limits,
             frame: self.into_frame(),
             mid_stretched: None,
+            stretched: false,
         }
     }
 
@@ -402,6 +406,7 @@ pub struct VariantFragment {
     pub span: Span,
     pub limits: Limits,
     pub mid_stretched: Option<bool>,
+    pub stretched: bool,
 }
 
 impl VariantFragment {

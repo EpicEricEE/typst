@@ -75,7 +75,9 @@ fn stretch_glyph(
     // This is either good or the best we've got.
     if short_target <= best_advance || construction.assembly.is_none() {
         base.set_id(ctx, best_id);
-        return base.into_variant();
+        let mut variant = base.into_variant();
+        variant.stretched = true;
+        return variant;
     }
 
     // Assemble from parts.
@@ -193,6 +195,7 @@ fn assemble(
         span: base.span,
         limits: base.limits,
         mid_stretched: None,
+        stretched: true,
     }
 }
 

@@ -62,6 +62,7 @@ impl LayoutMath for Packed<AttachElem> {
             };
 
         let base = ctx.layout_into_fragment(self.base(), styles)?;
+        let mut fragments = ctx.layout_into_fragments(self.base(), styles)?;
 
         let sup_style = style_for_superscript(styles);
         let tl = layout_attachment(ctx, styles.chain(&sup_style), AttachElem::tl)?;
@@ -76,7 +77,20 @@ impl LayoutMath for Packed<AttachElem> {
         let limits = base.limits().active(styles);
         let (t, tr) = if limits || tr.is_some() { (t, tr) } else { (None, t) };
         let (b, br) = if limits || br.is_some() { (b, br) } else { (None, b) };
-        layout_attachments(ctx, styles, base, [tl, t, tr, bl, b, br])
+
+        if fragments.len() == 1 || t.is_some() || b.is_some() {
+            // Layout all attachments on the base fragment.
+            return layout_attachments(ctx, styles, base, [tl, t, tr, bl, b, br]);
+        }
+
+        // If there is more than one fragment, layout the left attachments on
+        // the first fragment and the right attachments on the last fragment.
+        let last = fragments.pop().unwrap();
+        let first = fragments.remove(0);
+
+        layout_attachments(ctx, styles, first, [tl, None, None, bl, None, None])?;
+        ctx.extend(fragments);
+        layout_attachments(ctx, styles, last, [None, None, tr, None, None, br])
     }
 }
 

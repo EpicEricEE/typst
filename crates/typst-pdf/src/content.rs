@@ -9,18 +9,19 @@ use pdf_writer::{
     types::{ColorSpaceOperand, LineCapStyle, LineJoinStyle, TextRenderingMode},
     Content, Finish, Name, Rect, Str,
 };
-use typst::layout::{
-    Abs, Em, Frame, FrameItem, GroupItem, Point, Ratio, Size, Transform,
-};
 use typst::model::Destination;
 use typst::text::{color::is_color_glyph, Font, TextItem, TextItemView};
 use typst::utils::{Deferred, Numeric, SliceExt};
 use typst::visualize::{
     FixedStroke, Geometry, Image, LineCap, LineJoin, Paint, Path, PathItem, Shape,
 };
+use typst::{
+    layout::{Abs, Em, Frame, FrameItem, GroupItem, Point, Ratio, Size, Transform},
+    visualize::ColorSpace,
+};
 
 use crate::color_font::ColorFontMap;
-use crate::extg::ExtGState;
+use crate::extg::{ExtGState, SoftMask};
 use crate::image::deferred_image;
 use crate::{color::PaintEncode, resources::Resources};
 use crate::{deflate_deferred, AbsExt, EmExt};
@@ -88,6 +89,8 @@ pub struct Builder<'a, R = ()> {
     pub(crate) resources: &'a mut Resources<R>,
     /// The PDF content stream that is being built.
     pub content: Content,
+    /// The size of the content.
+    pub size: Size,
     /// Current graphic state.
     state: State,
     /// Stack of saved graphic states.
@@ -105,6 +108,7 @@ impl<'a, R> Builder<'a, R> {
             resources,
             uses_opacities: false,
             content: Content::new(),
+            size,
             state: State::new(size),
             saves: vec![],
             links: vec![],
@@ -129,7 +133,7 @@ struct State {
     /// The color space of the current fill paint.
     fill_space: Option<Name<'static>>,
     /// The current external graphic state.
-    external_graphics_state: Option<ExtGState>,
+    external_graphics_state: ExtGState,
     /// The current stroke paint.
     stroke: Option<FixedStroke>,
     /// The color space of the current stroke paint.
@@ -148,7 +152,7 @@ impl State {
             font: None,
             fill: None,
             fill_space: None,
-            external_graphics_state: None,
+            external_graphics_state: ExtGState::default(),
             stroke: None,
             stroke_space: None,
             text_rendering_mode: TextRenderingMode::Fill,
@@ -191,12 +195,13 @@ impl Builder<'_, ()> {
     }
 
     fn set_external_graphics_state(&mut self, graphics_state: &ExtGState) {
-        let current_state = self.state.external_graphics_state.as_ref();
-        if current_state != Some(graphics_state) {
-            let index = self.resources.ext_gs.insert(*graphics_state);
+        let current_state = &self.state.external_graphics_state;
+        if current_state != graphics_state {
+            let index = self.resources.ext_gs.insert(graphics_state.clone());
             let name = eco_format!("Gs{index}");
             self.content.set_parameters(Name(name.as_bytes()));
 
+            self.state.external_graphics_state = graphics_state.clone();
             if graphics_state.uses_opacities() {
                 self.uses_opacities = true;
             }
@@ -204,27 +209,55 @@ impl Builder<'_, ()> {
     }
 
     fn set_opacities(&mut self, stroke: Option<&FixedStroke>, fill: Option<&Paint>) {
-        let stroke_opacity = stroke
-            .map(|stroke| {
-                let color = match &stroke.paint {
-                    Paint::Solid(color) => *color,
-                    Paint::Gradient(_) | Paint::Pattern(_) => return 255,
-                };
+        let get_opacity = |paint: &Paint| {
+            let color = match paint {
+                Paint::Solid(color) => *color,
+                Paint::Gradient(gradient) => {
+                    let mut alphas = gradient
+                        .stops_ref()
+                        .iter()
+                        .map(|(color, _)| color.alpha().unwrap_or(1.0));
 
-                color.alpha().map_or(255, |v| (v * 255.0).round() as u8)
-            })
-            .unwrap_or(255);
-        let fill_opacity = fill
-            .map(|paint| {
-                let color = match paint {
-                    Paint::Solid(color) => *color,
-                    Paint::Gradient(_) | Paint::Pattern(_) => return 255,
-                };
+                    let first_alpha = alphas.next().unwrap_or(1.0);
+                    if alphas.all(|a| a == first_alpha) {
+                        return (first_alpha * 255.0).round() as u8;
+                    }
 
-                color.alpha().map_or(255, |v| (v * 255.0).round() as u8)
-            })
-            .unwrap_or(255);
-        self.set_external_graphics_state(&ExtGState { stroke_opacity, fill_opacity });
+                    // Use soft mask for variable opacity gradients.
+                    return 255;
+                }
+                Paint::Pattern(_) => return 255,
+            };
+
+            color.alpha().map_or(255, |v| (v * 255.0).round() as u8)
+        };
+
+        let stroke_opacity = stroke.map_or(255, |stroke| get_opacity(&stroke.paint));
+        let fill_opacity = fill.map_or(255, get_opacity);
+
+        self.set_external_graphics_state(&ExtGState {
+            stroke_opacity,
+            fill_opacity,
+            soft_mask: None,
+        });
+    }
+
+    fn reset_opacities(&mut self) {
+        self.set_external_graphics_state(&ExtGState {
+            stroke_opacity: 255,
+            fill_opacity: 255,
+            soft_mask: None,
+        })
+    }
+
+    pub fn set_softmask(&mut self, soft_mask: SoftMask) {
+        self.resources.colors.mark_as_used(ColorSpace::D65Gray);
+        self.uses_opacities = true;
+        self.set_external_graphics_state(&ExtGState {
+            stroke_opacity: 255,
+            fill_opacity: 255,
+            soft_mask: Some(soft_mask),
+        });
     }
 
     pub fn transform(&mut self, transform: Transform) {
@@ -542,6 +575,8 @@ fn write_color_glyphs(ctx: &mut Builder, pos: Point, text: TextItemView) {
 
     let mut last_font = None;
 
+    ctx.reset_opacities();
+
     ctx.content.begin_text();
     ctx.content.set_text_matrix([1.0, 0.0, 0.0, -1.0, x, y]);
     // So that the next call to ctx.set_font() will change the font to one that
@@ -670,6 +705,8 @@ fn write_image(ctx: &mut Builder, x: f32, y: f32, image: &Image, size: Size) {
         }
         image
     });
+
+    ctx.reset_opacities();
 
     let name = eco_format!("Im{index}");
     let w = size.x.to_f32();

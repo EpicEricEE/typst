@@ -847,6 +847,14 @@ impl Gradient {
         })
     }
 
+    /// Does this gradient have any stops with opacities?
+    pub fn uses_opacities(&self) -> bool {
+        self.stops_ref()
+            .iter()
+            .filter_map(|(color, _)| color.alpha())
+            .any(|alpha| alpha < 1.0)
+    }
+
     /// Corrects this angle for the aspect ratio of a gradient.
     ///
     /// This is used specifically for gradients.

@@ -89,10 +89,8 @@ pub struct Builder<'a, R = ()> {
     pub(crate) resources: &'a mut Resources<R>,
     /// The PDF content stream that is being built.
     pub content: Content,
-    /// The size of the content.
-    pub size: Size,
     /// Current graphic state.
-    state: State,
+    pub(crate) state: State,
     /// Stack of saved graphic states.
     saves: Vec<State>,
     /// Wheter any stroke or fill was not totally opaque.
@@ -108,7 +106,6 @@ impl<'a, R> Builder<'a, R> {
             resources,
             uses_opacities: false,
             content: Content::new(),
-            size,
             state: State::new(size),
             saves: vec![],
             links: vec![],
@@ -119,11 +116,11 @@ impl<'a, R> Builder<'a, R> {
 /// A simulated graphics state used to deduplicate graphics state changes and
 /// keep track of the current transformation matrix for link annotations.
 #[derive(Debug, Clone)]
-struct State {
+pub(crate) struct State {
     /// The transform of the current item.
-    transform: Transform,
+    pub transform: Transform,
     /// The transform of first hard frame in the hierarchy.
-    container_transform: Transform,
+    pub container_transform: Transform,
     /// The size of the first hard frame in the hierarchy.
     size: Size,
     /// The current font.

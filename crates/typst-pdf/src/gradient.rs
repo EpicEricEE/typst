@@ -12,7 +12,8 @@ use pdf_writer::{
 use typst::layout::{Abs, Angle, Point, Quadrant, Ratio, Transform};
 use typst::utils::Numeric;
 use typst::visualize::{
-    Color, ColorSpace, ConicGradient, Gradient, LinearGradient, RadialGradient, RatioOrAngle, RelativeTo, Rgb, WeightedColor
+    Color, ColorSpace, ConicGradient, Gradient, LinearGradient, RadialGradient,
+    RatioOrAngle, RelativeTo, Rgb, WeightedColor,
 };
 
 use crate::color::{self, ColorSpaceExt, PaintEncode, QuantizedColor};
@@ -302,14 +303,13 @@ impl PaintEncode for Gradient {
         ctx.content.set_fill_pattern(None, name);
 
         if self.uses_opacities() {
-            // Transform back to the Typst coordinate system, since the
-            // gradient is drawn in an XObject, which is already in the
-            // transformed coordinate system.
+            // The gradient transformation already includes the current state's
+            // transformation matrix, so we invert it to get the pure gradient
+            // transformation relative to the current state.
             ctx.set_softmask(SoftMask {
                 transform: gradient
                     .transform
-                    .post_concat(Transform::translate(Abs::zero(), -ctx.size.y))
-                    .post_concat(Transform::scale(Ratio::one(), -Ratio::one())),
+                    .post_concat(ctx.state.transform.invert().unwrap()),
                 gradient: gradient.to_alpha(),
             })
         }

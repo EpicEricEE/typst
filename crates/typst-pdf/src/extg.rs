@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use pdf_writer::{types::MaskType, Content, Finish, Name, Rect, Ref};
 use typst::layout::Transform;
-use typst::visualize::ColorSpace;
 
 use crate::gradient::{shading, PdfGradient};
 use crate::{transform_to_array, PdfChunk, WithGlobalRefs};
@@ -63,7 +62,7 @@ pub fn write_graphic_states(
                     context,
                     &soft_mask.gradient,
                     &mut chunk,
-                    ColorSpace::D65Gray,
+                    soft_mask.gradient.gradient.space(),
                 );
 
                 let group = chunk.alloc();

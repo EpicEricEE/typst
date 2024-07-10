@@ -251,7 +251,7 @@ impl Builder<'_, ()> {
     }
 
     pub fn set_softmask(&mut self, soft_mask: SoftMask) {
-        self.resources.colors.mark_as_used(ColorSpace::D65Gray);
+        self.resources.colors.mark_as_used(ColorSpace::Srgb);
         self.uses_opacities = true;
         self.set_external_graphics_state(&ExtGState {
             stroke_opacity: 255,

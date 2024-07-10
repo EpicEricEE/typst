@@ -9,15 +9,15 @@ use pdf_writer::{
     types::{ColorSpaceOperand, LineCapStyle, LineJoinStyle, TextRenderingMode},
     Content, Finish, Name, Rect, Str,
 };
+use typst::layout::{
+    Abs, Em, Frame, FrameItem, GroupItem, Point, Ratio, Size, Transform,
+};
 use typst::model::Destination;
 use typst::text::{color::is_color_glyph, Font, TextItem, TextItemView};
 use typst::utils::{Deferred, Numeric, SliceExt};
 use typst::visualize::{
-    FixedStroke, Geometry, Image, LineCap, LineJoin, Paint, Path, PathItem, Shape,
-};
-use typst::{
-    layout::{Abs, Em, Frame, FrameItem, GroupItem, Point, Ratio, Size, Transform},
-    visualize::ColorSpace,
+    ColorSpace, FixedStroke, Geometry, Image, LineCap, LineJoin, Paint, Path, PathItem,
+    Shape,
 };
 
 use crate::color_font::ColorFontMap;

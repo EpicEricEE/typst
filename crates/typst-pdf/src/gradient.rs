@@ -306,12 +306,12 @@ impl PaintEncode for Gradient {
             // The gradient transformation already includes the current state's
             // transformation matrix, so we invert it to get the pure gradient
             // transformation relative to the current state.
-            ctx.set_softmask(SoftMask {
+            ctx.set_softmask(Some(SoftMask {
                 transform: gradient
                     .transform
                     .post_concat(ctx.state.transform.invert().unwrap()),
                 gradient: gradient.to_alpha(),
-            })
+            }))
         }
     }
 

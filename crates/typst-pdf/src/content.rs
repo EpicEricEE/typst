@@ -247,13 +247,12 @@ impl Builder<'_, ()> {
         })
     }
 
-    pub fn set_softmask(&mut self, soft_mask: SoftMask) {
+    pub fn set_softmask(&mut self, soft_mask: Option<SoftMask>) {
         self.resources.colors.mark_as_used(ColorSpace::Srgb);
         self.uses_opacities = true;
         self.set_external_graphics_state(&ExtGState {
-            stroke_opacity: 255,
-            fill_opacity: 255,
-            soft_mask: Some(soft_mask),
+            soft_mask,
+            ..self.state.external_graphics_state
         });
     }
 
@@ -476,6 +475,9 @@ fn write_normal_text(ctx: &mut Builder, pos: Point, text: TextItemView) {
         glyph_set.entry(g.id).or_insert_with(|| segment.into());
     }
 
+    // Set opacities before potentially setting soft mask.
+    ctx.set_opacities(text.item.stroke.as_ref(), Some(&text.item.fill));
+
     let fill_transform = ctx.state.transforms(Size::zero(), pos);
     ctx.set_fill(&text.item.fill, true, fill_transform);
 
@@ -495,7 +497,6 @@ fn write_normal_text(ctx: &mut Builder, pos: Point, text: TextItemView) {
     }
 
     ctx.set_font(&text.item.font, text.item.size);
-    ctx.set_opacities(text.item.stroke.as_ref(), Some(&text.item.fill));
     ctx.content.begin_text();
 
     // Position the text.
@@ -628,6 +629,8 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
         return;
     }
 
+    ctx.set_opacities(stroke, shape.fill.as_ref());
+
     if let Some(fill) = &shape.fill {
         ctx.set_fill(fill, false, ctx.state.transforms(shape.geometry.bbox_size(), pos));
     }
@@ -639,8 +642,6 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
             ctx.state.transforms(shape.geometry.bbox_size(), pos),
         );
     }
-
-    ctx.set_opacities(stroke, shape.fill.as_ref());
 
     match shape.geometry {
         Geometry::Line(target) => {

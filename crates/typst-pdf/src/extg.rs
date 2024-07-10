@@ -67,7 +67,6 @@ pub fn write_graphic_states(
 
                 let group = chunk.alloc();
 
-                // Build content of XObject.
                 let mut content = Content::new();
                 content.shading(SHADING_NAME);
 
@@ -93,6 +92,8 @@ pub fn write_graphic_states(
                     .subtype(MaskType::Luminosity)
                     .group(soft_mask_group)
                     .finish();
+            } else {
+                extgstate.soft_mask_name(Name(b"None"));
             }
         }
     });

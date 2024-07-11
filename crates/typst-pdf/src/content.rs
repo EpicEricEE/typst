@@ -132,7 +132,7 @@ pub(crate) struct State {
     /// The current external graphic state.
     external_graphics_state: ExtGState,
     /// The current stroke paint.
-    stroke: Option<FixedStroke>,
+    pub stroke: Option<FixedStroke>,
     /// The color space of the current stroke paint.
     stroke_space: Option<Name<'static>>,
     /// The current text rendering mode.
@@ -209,21 +209,7 @@ impl Builder<'_, ()> {
         let get_opacity = |paint: &Paint| {
             let color = match paint {
                 Paint::Solid(color) => *color,
-                Paint::Gradient(gradient) => {
-                    let mut alphas = gradient
-                        .stops_ref()
-                        .iter()
-                        .map(|(color, _)| color.alpha().unwrap_or(1.0));
-
-                    let first_alpha = alphas.next().unwrap_or(1.0);
-                    if alphas.all(|a| a == first_alpha) {
-                        return (first_alpha * 255.0).round() as u8;
-                    }
-
-                    // Use soft mask for variable opacity gradients.
-                    return 255;
-                }
-                Paint::Pattern(_) => return 255,
+                Paint::Gradient(_) | Paint::Pattern(_) => return 255,
             };
 
             color.alpha().map_or(255, |v| (v * 255.0).round() as u8)
@@ -323,7 +309,6 @@ impl Builder<'_, ()> {
             )
         {
             let FixedStroke { paint, thickness, cap, join, dash, miter_limit } = stroke;
-            paint.set_as_stroke(self, on_text, transforms);
 
             self.content.set_line_width(thickness.to_f32());
             if self.state.stroke.as_ref().map(|s| &s.cap) != Some(cap) {
@@ -346,6 +331,9 @@ impl Builder<'_, ()> {
                 self.content.set_miter_limit(miter_limit.get() as f32);
             }
             self.state.stroke = Some(stroke.clone());
+
+            // Requires the state's stroke field to be set.
+            paint.set_as_stroke(self, on_text, transforms);
         }
     }
 
@@ -617,6 +605,29 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
     let x = pos.x.to_f32();
     let y = pos.y.to_f32();
 
+    macro_rules! draw_path {
+        () => {
+            match shape.geometry {
+                Geometry::Line(target) => {
+                    let dx = target.x.to_f32();
+                    let dy = target.y.to_f32();
+                    ctx.content.move_to(x, y);
+                    ctx.content.line_to(x + dx, y + dy);
+                }
+                Geometry::Rect(size) => {
+                    let w = size.x.to_f32();
+                    let h = size.y.to_f32();
+                    if w.abs() > f32::EPSILON && h.abs() > f32::EPSILON {
+                        ctx.content.rect(x, y, w, h);
+                    }
+                }
+                Geometry::Path(ref path) => {
+                    write_path(ctx, x, y, path);
+                }
+            }
+        };
+    }
+
     let stroke = shape.stroke.as_ref().and_then(|stroke| {
         if stroke.thickness.to_f32() > 0.0 {
             Some(stroke)
@@ -631,43 +642,39 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
 
     ctx.set_opacities(stroke, shape.fill.as_ref());
 
-    if let Some(fill) = &shape.fill {
-        ctx.set_fill(fill, false, ctx.state.transforms(shape.geometry.bbox_size(), pos));
-    }
+    draw_path!();
 
-    if let Some(stroke) = stroke {
-        ctx.set_stroke(
-            stroke,
-            false,
-            ctx.state.transforms(shape.geometry.bbox_size(), pos),
-        );
-    }
+    let needs_softmask = |paint: &Paint| {
+        matches!(paint, Paint::Gradient(gradient) if gradient.uses_opacities())
+    };
 
-    match shape.geometry {
-        Geometry::Line(target) => {
-            let dx = target.x.to_f32();
-            let dy = target.y.to_f32();
-            ctx.content.move_to(x, y);
-            ctx.content.line_to(x + dx, y + dy);
+    let transforms = ctx.state.transforms(shape.geometry.bbox_size(), pos);
+    match (shape.fill.as_ref(), shape.stroke.as_ref()) {
+        (None, None) => unreachable!(),
+        (Some(fill), None) => {
+            ctx.set_fill(fill, false, transforms);
+            ctx.content.fill_nonzero();
         }
-        Geometry::Rect(size) => {
-            let w = size.x.to_f32();
-            let h = size.y.to_f32();
-            if w.abs() > f32::EPSILON && h.abs() > f32::EPSILON {
-                ctx.content.rect(x, y, w, h);
+        (None, Some(stroke)) => {
+            ctx.set_stroke(stroke, false, transforms);
+            ctx.content.stroke();
+        },
+        (Some(fill), Some(stroke)) => {
+            if needs_softmask(fill) || needs_softmask(&stroke.paint) {
+                // If the fill or the stroke needs a soft mask, we need to draw
+                // the path twice and do the fill and stroke separately.
+                ctx.set_fill(fill, false, transforms);
+                ctx.content.fill_nonzero();
+                ctx.set_stroke(stroke, false, transforms);
+                draw_path!();
+                ctx.content.stroke();
+            } else {
+                ctx.set_fill(fill, false, transforms);
+                ctx.set_stroke(stroke, false, transforms);
+                ctx.content.fill_nonzero_and_stroke();
             }
         }
-        Geometry::Path(ref path) => {
-            write_path(ctx, x, y, path);
-        }
     }
-
-    match (&shape.fill, stroke) {
-        (None, None) => unreachable!(),
-        (Some(_), None) => ctx.content.fill_nonzero(),
-        (None, Some(_)) => ctx.content.stroke(),
-        (Some(_), Some(_)) => ctx.content.fill_nonzero_and_stroke(),
-    };
 }
 
 /// Encode a bezier path into the content stream.

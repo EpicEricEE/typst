@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 
 use pdf_writer::{types::MaskType, Content, Finish, Name, Rect, Ref};
-use typst::layout::Transform;
+use typst::layout::{Abs, Axes, Transform};
 
 use crate::gradient::{shading, PdfGradient};
-use crate::{transform_to_array, PdfChunk, WithGlobalRefs};
+use crate::{transform_to_array, AbsExt, PdfChunk, WithGlobalRefs};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct SoftMask {
+    /// The thickness of the stroke.
+    pub stroke_thickness: Abs,
     /// The transform to apply to the gradient.
     pub transform: Transform,
     /// The gradient to use for the soft mask.
@@ -72,9 +74,24 @@ pub fn write_graphic_states(
 
                 let data = content.finish();
                 let mut xobject = chunk.form_xobject(group, &data);
+
+                // Incorporate the stroke thickness into the transform.
+                let stroke_ratio = Axes::new(
+                    soft_mask.stroke_thickness.to_f32()
+                        / soft_mask.transform.sx.get() as f32,
+                    soft_mask.stroke_thickness.to_f32()
+                        / soft_mask.transform.sy.get() as f32,
+                );
+
                 xobject
                     .matrix(transform_to_array(soft_mask.transform))
-                    .bbox(Rect::new(0.0, 0.0, 1.0, 1.0));
+                    .bbox(Rect::new(
+                        -stroke_ratio.x,
+                        -stroke_ratio.y,
+                        1.0 + 2.0 * stroke_ratio.x,
+                        1.0 + 2.0 * stroke_ratio.y,
+                    ));
+
                 xobject.group().transparency().color_space().d65_gray();
                 xobject.resources().shadings().pair(SHADING_NAME, shading).finish();
 

@@ -642,8 +642,6 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
 
     ctx.set_opacities(stroke, shape.fill.as_ref());
 
-    draw_path!();
-
     let needs_softmask = |paint: &Paint| {
         matches!(paint, Paint::Gradient(gradient) if gradient.uses_opacities())
     };
@@ -653,10 +651,12 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
         (None, None) => unreachable!(),
         (Some(fill), None) => {
             ctx.set_fill(fill, false, transforms);
+            draw_path!();
             ctx.content.fill_nonzero();
         }
         (None, Some(stroke)) => {
             ctx.set_stroke(stroke, false, transforms);
+            draw_path!();
             ctx.content.stroke();
         },
         (Some(fill), Some(stroke)) => {
@@ -664,13 +664,16 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
                 // If the fill or the stroke needs a soft mask, we need to draw
                 // the path twice and do the fill and stroke separately.
                 ctx.set_fill(fill, false, transforms);
+                draw_path!();
                 ctx.content.fill_nonzero();
+
                 ctx.set_stroke(stroke, false, transforms);
                 draw_path!();
                 ctx.content.stroke();
             } else {
                 ctx.set_fill(fill, false, transforms);
                 ctx.set_stroke(stroke, false, transforms);
+                draw_path!();
                 ctx.content.fill_nonzero_and_stroke();
             }
         }

@@ -86,10 +86,10 @@ pub fn write_graphic_states(
                 xobject
                     .matrix(transform_to_array(soft_mask.transform))
                     .bbox(Rect::new(
-                        -stroke_ratio.x,
-                        -stroke_ratio.y,
-                        1.0 + 2.0 * stroke_ratio.x,
-                        1.0 + 2.0 * stroke_ratio.y,
+                        -stroke_ratio.x / 2.0,
+                        -stroke_ratio.y / 2.0,
+                        1.0 + stroke_ratio.x,
+                        1.0 + stroke_ratio.y,
                     ));
 
                 xobject.group().transparency().color_space().d65_gray();

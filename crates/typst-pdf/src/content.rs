@@ -191,17 +191,18 @@ impl Builder<'_, ()> {
         self.state = self.saves.pop().expect("missing state save");
     }
 
-    fn set_external_graphics_state(&mut self, graphics_state: &ExtGState) {
+    fn set_external_graphics_state(&mut self, graphics_state: ExtGState) {
         let current_state = &self.state.external_graphics_state;
-        if current_state != graphics_state {
+        if current_state != &graphics_state {
             let index = self.resources.ext_gs.insert(graphics_state.clone());
             let name = eco_format!("Gs{index}");
             self.content.set_parameters(Name(name.as_bytes()));
 
-            self.state.external_graphics_state = graphics_state.clone();
             if graphics_state.uses_opacities() {
                 self.uses_opacities = true;
             }
+
+            self.state.external_graphics_state = graphics_state;
         }
     }
 
@@ -218,7 +219,7 @@ impl Builder<'_, ()> {
         let stroke_opacity = stroke.map_or(255, |stroke| get_opacity(&stroke.paint));
         let fill_opacity = fill.map_or(255, get_opacity);
 
-        self.set_external_graphics_state(&ExtGState {
+        self.set_external_graphics_state(ExtGState {
             stroke_opacity,
             fill_opacity,
             soft_mask: None,
@@ -226,7 +227,7 @@ impl Builder<'_, ()> {
     }
 
     fn reset_opacities(&mut self) {
-        self.set_external_graphics_state(&ExtGState {
+        self.set_external_graphics_state(ExtGState {
             stroke_opacity: 255,
             fill_opacity: 255,
             soft_mask: None,
@@ -236,7 +237,7 @@ impl Builder<'_, ()> {
     pub fn set_softmask(&mut self, soft_mask: Option<SoftMask>) {
         self.resources.colors.mark_as_used(ColorSpace::Srgb);
         self.uses_opacities = true;
-        self.set_external_graphics_state(&ExtGState {
+        self.set_external_graphics_state(ExtGState {
             soft_mask,
             ..self.state.external_graphics_state
         });

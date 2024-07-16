@@ -93,7 +93,7 @@ pub struct Builder<'a, R = ()> {
     pub(crate) state: State,
     /// Stack of saved graphic states.
     saves: Vec<State>,
-    /// Wheter any stroke or fill was not totally opaque.
+    /// Whether any stroke or fill was not totally opaque.
     uses_opacities: bool,
     /// All clickable links that are present in this content.
     links: Vec<(Destination, Rect)>,

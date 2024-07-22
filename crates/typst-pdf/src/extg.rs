@@ -62,12 +62,8 @@ pub fn write_graphic_states(
                 const SHADING_NAME: Name = Name(b"ShX");
 
                 let color_space = soft_mask.gradient.gradient.space();
-                let shading = shading(
-                    context,
-                    &soft_mask.gradient,
-                    &mut chunk,
-                    color_space,
-                );
+                let shading =
+                    shading(context, &soft_mask.gradient, &mut chunk, color_space);
 
                 let group = chunk.alloc();
 

@@ -16,9 +16,8 @@ use typst::model::Destination;
 use typst::text::{color::is_color_glyph, Font, TextItem, TextItemView};
 use typst::utils::{Deferred, Numeric, SliceExt};
 use typst::visualize::{
-    ColorSpace, FillRule, FixedStroke, Geometry, Image, LineCap, LineJoin, Paint, Path, PathItem,
-
-    Shape,
+    ColorSpace, FillRule, FixedStroke, Geometry, Image, LineCap, LineJoin, Paint, Path,
+    PathItem, Shape,
 };
 
 use crate::color_font::ColorFontMap;
@@ -652,9 +651,7 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
 
     ctx.set_opacities(stroke, shape.fill.as_ref());
 
-    let needs_softmask = |paint: &Paint| {
-        matches!(paint, Paint::Gradient(gradient) if gradient.uses_opacities())
-    };
+    let needs_softmask = |paint: &Paint| matches!(paint, Paint::Gradient(gradient) if gradient.uses_opacities());
 
     let transforms = ctx.state.transforms(shape.geometry.bbox_size(), pos);
     match (shape.fill.as_ref(), shape.stroke.as_ref()) {
@@ -671,7 +668,7 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
             ctx.set_stroke(stroke, false, transforms);
             draw_path!();
             ctx.content.stroke();
-        },
+        }
         (Some(fill), Some(stroke)) => {
             if needs_softmask(fill) || needs_softmask(&stroke.paint) {
                 // If the fill or the stroke needs a soft mask, we need to draw

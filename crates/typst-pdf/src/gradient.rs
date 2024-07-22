@@ -149,8 +149,7 @@ pub fn shading(
             shading.finish();
         }
         Gradient::Radial(radial) => {
-            let shading_function =
-                shading_function(gradient, chunk, color_space_of(gradient));
+            let shading_function = shading_function(gradient, chunk, color_space);
             let mut shading = chunk.function_shading(shading);
             shading.shading_type(FunctionShadingType::Radial);
 

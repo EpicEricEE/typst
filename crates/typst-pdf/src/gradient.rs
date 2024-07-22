@@ -327,13 +327,19 @@ impl PaintEncode for Gradient {
         ctx.content.set_stroke_pattern(None, name);
 
         if self.uses_opacities() {
-            let thickness =
-                ctx.state.stroke.as_ref().map_or(Abs::zero(), |s| s.thickness);
+            // Thickness of the stroke, including the miter limit as the soft
+            // mask has to fully cover the stroke.
+            let stroke_thickness = ctx
+                .state
+                .stroke
+                .as_ref()
+                .map_or(Abs::zero(), |s| s.miter_limit.get() * s.thickness);
+
             // The gradient transformation already includes the current state's
             // transformation matrix, so we invert it to get the pure gradient
             // transformation relative to the current state.
             ctx.set_softmask(Some(SoftMask {
-                stroke_thickness: thickness,
+                stroke_thickness,
                 transform: gradient
                     .transform
                     .post_concat(ctx.state.transform.invert().unwrap()),

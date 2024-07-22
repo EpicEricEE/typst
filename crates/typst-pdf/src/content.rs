@@ -651,7 +651,10 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
 
     ctx.set_opacities(stroke, shape.fill.as_ref());
 
-    let needs_softmask = |paint: &Paint| matches!(paint, Paint::Gradient(gradient) if gradient.uses_opacities());
+    let needs_softmask = |paint: &Paint| match paint {
+        Paint::Gradient(gradient) => gradient.uses_opacities(),
+        _ => false,
+    };
 
     let transforms = ctx.state.transforms(shape.geometry.bbox_size(), pos);
     match (shape.fill.as_ref(), shape.stroke.as_ref()) {

@@ -242,8 +242,10 @@ impl Builder<'_, ()> {
     }
 
     pub fn set_softmask(&mut self, soft_mask: Option<SoftMask>) {
-        self.resources.colors.mark_as_used(ColorSpace::Srgb);
-        self.uses_opacities = true;
+        if soft_mask.is_some() {
+            self.resources.colors.mark_as_used(ColorSpace::D65Gray);
+            self.uses_opacities = true;
+        }
         self.set_external_graphics_state(ExtGState {
             soft_mask,
             ..self.state.external_graphics_state

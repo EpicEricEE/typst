@@ -12,8 +12,8 @@ use pdf_writer::{
 use typst::layout::{Abs, Angle, Point, Quadrant, Ratio, Transform};
 use typst::utils::Numeric;
 use typst::visualize::{
-    Color, ColorSpace, ConicGradient, Gradient, LinearGradient, RadialGradient,
-    RatioOrAngle, RelativeTo, Rgb, WeightedColor,
+    Color, ColorSpace, ConicGradient, Gradient, LinearGradient, Luma, RadialGradient,
+    RatioOrAngle, RelativeTo, WeightedColor,
 };
 
 use crate::color::{self, ColorSpaceExt, PaintEncode, QuantizedColor};
@@ -42,26 +42,23 @@ impl PdfGradient {
         let to_luma = |stops: &[(Color, Ratio)]| {
             stops
                 .iter()
-                .map(|&(c, w)| {
-                    let val = c.alpha().unwrap_or(1.0);
-                    (Rgb::from_components((val, val, val, 1.0)).into(), w)
-                })
+                .map(|&(c, w)| (Luma::new(c.alpha().unwrap_or(1.0), 1.0).into(), w))
                 .collect()
         };
 
         let alpha_gradient = match &self.gradient {
             Gradient::Linear(linear) => Gradient::Linear(Arc::new(LinearGradient {
-                space: ColorSpace::Srgb,
+                space: ColorSpace::D65Gray,
                 stops: to_luma(&linear.stops),
                 ..(**linear)
             })),
             Gradient::Radial(radial) => Gradient::Radial(Arc::new(RadialGradient {
-                space: ColorSpace::Srgb,
+                space: ColorSpace::D65Gray,
                 stops: to_luma(&radial.stops),
                 ..(**radial)
             })),
             Gradient::Conic(conic) => Gradient::Conic(Arc::new(ConicGradient {
-                space: ColorSpace::Srgb,
+                space: ColorSpace::D65Gray,
                 stops: to_luma(&conic.stops),
                 ..(**conic)
             })),

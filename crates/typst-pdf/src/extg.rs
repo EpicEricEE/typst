@@ -4,7 +4,7 @@ use pdf_writer::{types::MaskType, Content, Finish, Name, Rect, Ref};
 use typst::layout::{Abs, Axes, Transform};
 
 use crate::gradient::{shading, PdfGradient};
-use crate::{transform_to_array, AbsExt, PdfChunk, WithGlobalRefs};
+use crate::{color, transform_to_array, AbsExt, PdfChunk, WithGlobalRefs};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct SoftMask {
@@ -60,11 +60,13 @@ pub fn write_graphic_states(
 
             let soft_mask_group = external_gs.soft_mask.as_ref().map(|soft_mask| {
                 const SHADING_NAME: Name = Name(b"ShX");
+
+                let color_space = soft_mask.gradient.gradient.space();
                 let shading = shading(
                     context,
                     &soft_mask.gradient,
                     &mut chunk,
-                    soft_mask.gradient.gradient.space(),
+                    color_space,
                 );
 
                 let group = chunk.alloc();
@@ -92,7 +94,12 @@ pub fn write_graphic_states(
                         1.0 + stroke_ratio.y,
                     ));
 
-                xobject.group().transparency().color_space().d65_gray();
+                color::write(
+                    color_space,
+                    xobject.group().transparency().color_space(),
+                    &context.globals.color_functions,
+                );
+
                 xobject.resources().shadings().pair(SHADING_NAME, shading).finish();
 
                 group

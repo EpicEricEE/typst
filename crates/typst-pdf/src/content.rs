@@ -16,7 +16,8 @@ use typst::model::Destination;
 use typst::text::{color::is_color_glyph, Font, TextItem, TextItemView};
 use typst::utils::{Deferred, Numeric, SliceExt};
 use typst::visualize::{
-    ColorSpace, FixedStroke, Geometry, Image, LineCap, LineJoin, Paint, Path, PathItem,
+    ColorSpace, FillRule, FixedStroke, Geometry, Image, LineCap, LineJoin, Paint, Path, PathItem,
+
     Shape,
 };
 
@@ -37,6 +38,7 @@ use crate::{deflate_deferred, AbsExt, EmExt};
 pub fn build(
     resources: &mut Resources<()>,
     frame: &Frame,
+    fill: Option<Paint>,
     color_glyph_width: Option<f32>,
 ) -> Encoded {
     let size = frame.size();
@@ -53,6 +55,11 @@ pub fn build(
             // Also move the origin to the top left corner
             .post_concat(Transform::translate(Abs::zero(), size.y)),
     );
+
+    if let Some(fill) = fill {
+        let shape = Geometry::Rect(frame.size()).filled(fill);
+        write_shape(&mut ctx, Point::zero(), &shape);
+    }
 
     // Encode the frame into the content stream.
     write_frame(&mut ctx, frame);
@@ -653,7 +660,10 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
         (Some(fill), None) => {
             ctx.set_fill(fill, false, transforms);
             draw_path!();
-            ctx.content.fill_nonzero();
+            match shape.fill_rule {
+                FillRule::NonZero => ctx.content.fill_nonzero(),
+                FillRule::EvenOdd => ctx.content.fill_even_odd(),
+            };
         }
         (None, Some(stroke)) => {
             ctx.set_stroke(stroke, false, transforms);
@@ -666,8 +676,10 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
                 // the path twice and do the fill and stroke separately.
                 ctx.set_fill(fill, false, transforms);
                 draw_path!();
-                ctx.content.fill_nonzero();
-
+                match shape.fill_rule {
+                    FillRule::NonZero => ctx.content.fill_nonzero(),
+                    FillRule::EvenOdd => ctx.content.fill_even_odd(),
+                };
                 ctx.set_stroke(stroke, false, transforms);
                 draw_path!();
                 ctx.content.stroke();
@@ -675,7 +687,10 @@ fn write_shape(ctx: &mut Builder, pos: Point, shape: &Shape) {
                 ctx.set_fill(fill, false, transforms);
                 ctx.set_stroke(stroke, false, transforms);
                 draw_path!();
-                ctx.content.fill_nonzero_and_stroke();
+                match shape.fill_rule {
+                    FillRule::NonZero => ctx.content.fill_nonzero_and_stroke(),
+                    FillRule::EvenOdd => ctx.content.fill_even_odd_and_stroke(),
+                };
             }
         }
     }

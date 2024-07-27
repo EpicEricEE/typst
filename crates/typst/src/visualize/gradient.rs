@@ -634,6 +634,45 @@ impl Gradient {
         })
     }
 
+    /// Reverses the stops of this gradient.
+    #[func(title = "Reverse")]
+    pub fn rev(&self) -> Gradient {
+        let stops = self
+            .stops_ref()
+            .iter()
+            .rev()
+            .map(|&(color, offset)| (color, Ratio::one() - offset))
+            .collect();
+
+        match self {
+            Self::Linear(linear) => Self::Linear(Arc::new(LinearGradient {
+                stops,
+                angle: linear.angle,
+                space: linear.space,
+                relative: linear.relative,
+                anti_alias: linear.anti_alias,
+            })),
+            Self::Radial(radial) => Self::Radial(Arc::new(RadialGradient {
+                stops,
+                center: radial.center,
+                radius: radial.radius,
+                focal_center: radial.focal_center,
+                focal_radius: radial.focal_radius,
+                space: radial.space,
+                relative: radial.relative,
+                anti_alias: radial.anti_alias,
+            })),
+            Self::Conic(conic) => Self::Conic(Arc::new(ConicGradient {
+                stops,
+                angle: conic.angle,
+                center: conic.center,
+                space: conic.space,
+                relative: conic.relative,
+                anti_alias: conic.anti_alias,
+            })),
+        }
+    }
+
     /// Returns the kind of this gradient.
     #[func]
     pub fn kind(&self) -> Func {

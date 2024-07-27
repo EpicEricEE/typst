@@ -686,32 +686,10 @@ impl Gradient {
     /// Returns the stops of this gradient.
     #[func]
     pub fn stops(&self) -> Vec<GradientStop> {
-        match self {
-            Self::Linear(linear) => linear
-                .stops
-                .iter()
-                .map(|(color, offset)| GradientStop {
-                    color: *color,
-                    offset: Some(*offset),
-                })
-                .collect(),
-            Self::Radial(radial) => radial
-                .stops
-                .iter()
-                .map(|(color, offset)| GradientStop {
-                    color: *color,
-                    offset: Some(*offset),
-                })
-                .collect(),
-            Self::Conic(conic) => conic
-                .stops
-                .iter()
-                .map(|(color, offset)| GradientStop {
-                    color: *color,
-                    offset: Some(*offset),
-                })
-                .collect(),
-        }
+        self.stops_ref()
+            .iter()
+            .map(|&(color, offset)| GradientStop { color, offset: Some(offset) })
+            .collect()
     }
 
     /// Returns the mixing space of this gradient.

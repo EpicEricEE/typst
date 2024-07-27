@@ -597,6 +597,16 @@ $ A = mat(
   ((red, 0%), (green, 25%), (blue, 50%), (green, 75%), (red, 100%))
 )
 
+--- gradient-reverse ---
+#test(
+  gradient.linear(red, green, blue).rev().stops(),
+  ((blue, 0%), (green, 50%), (red, 100%))
+)
+#test(
+  gradient.linear((red, 0%), (green, 75%), (blue, 100%)).rev().stops(),
+  ((blue, 0%), (green, 25%), (red, 100%))
+)
+
 --- gradient-repr ---
 // Gradients
 #set page(width: 400pt)

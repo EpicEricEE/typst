@@ -126,7 +126,7 @@ pub(crate) struct State {
     /// The transform of the current item.
     pub transform: Transform,
     /// The transform of first hard frame in the hierarchy.
-    pub container_transform: Transform,
+    container_transform: Transform,
     /// The size of the first hard frame in the hierarchy.
     size: Size,
     /// The current font.

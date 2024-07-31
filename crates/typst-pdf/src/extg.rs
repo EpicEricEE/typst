@@ -1,18 +1,16 @@
 use std::collections::HashMap;
 
 use pdf_writer::{types::MaskType, Content, Finish, Name, Rect, Ref};
-use typst::layout::{Abs, Axes, Transform};
+use typst::layout::{Abs, Axes};
 
 use crate::gradient::{shading, PdfGradient};
 use crate::{color, transform_to_array, AbsExt, PdfChunk, WithGlobalRefs};
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct SoftMask {
-    /// The thickness of the stroke.
-    pub stroke_thickness: Abs,
-    /// The transform to apply to the gradient.
-    pub transform: Transform,
-    /// The gradient to use for the soft mask.
+    /// How much the bounding box should be expanded to account for the stroke.
+    pub bbox_expansion: Abs,
+    /// The grayscale alpha gradient to use for the soft mask.
     pub gradient: PdfGradient,
 }
 
@@ -59,7 +57,7 @@ pub fn write_graphic_states(
             out.insert(external_gs.clone(), id);
 
             let soft_mask_group = external_gs.soft_mask.as_ref().map(|soft_mask| {
-                const SHADING_NAME: Name = Name(b"ShX");
+                const SHADING_NAME: Name = Name(b"Sh");
 
                 let color_space = soft_mask.gradient.gradient.space();
                 let shading =
@@ -73,21 +71,20 @@ pub fn write_graphic_states(
                 let data = content.finish();
                 let mut xobject = chunk.form_xobject(group, &data);
 
-                // Incorporate the stroke thickness into the transform.
-                let stroke_ratio = Axes::new(
-                    soft_mask.stroke_thickness.to_f32()
-                        / soft_mask.transform.sx.get() as f32,
-                    soft_mask.stroke_thickness.to_f32()
-                        / soft_mask.transform.sy.get() as f32,
+                let bbox_expansion_ratio = Axes::new(
+                    soft_mask.bbox_expansion.to_f32()
+                        / soft_mask.gradient.transform.sx.get() as f32,
+                    soft_mask.bbox_expansion.to_f32()
+                        / soft_mask.gradient.transform.sy.get() as f32,
                 );
 
                 xobject
-                    .matrix(transform_to_array(soft_mask.transform))
+                    .matrix(transform_to_array(soft_mask.gradient.transform))
                     .bbox(Rect::new(
-                        -stroke_ratio.x / 2.0,
-                        -stroke_ratio.y / 2.0,
-                        1.0 + stroke_ratio.x,
-                        1.0 + stroke_ratio.y,
+                        -bbox_expansion_ratio.x,
+                        -bbox_expansion_ratio.y,
+                        1.0 + bbox_expansion_ratio.x,
+                        1.0 + bbox_expansion_ratio.y,
                     ));
 
                 color::write(

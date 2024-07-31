@@ -12,8 +12,7 @@ use pdf_writer::{
 use typst::layout::{Abs, Angle, Point, Quadrant, Ratio, Transform};
 use typst::utils::Numeric;
 use typst::visualize::{
-    Color, ColorSpace, ConicGradient, Gradient, LinearGradient, Luma, RadialGradient,
-    RatioOrAngle, RelativeTo, WeightedColor,
+    Color, ColorSpace, Gradient, Luma, RatioOrAngle, RelativeTo, WeightedColor,
 };
 
 use crate::color::{self, ColorSpaceExt, PaintEncode, QuantizedColor};
@@ -37,39 +36,40 @@ pub struct PdfGradient {
 }
 
 impl PdfGradient {
-    /// Converts the gradient to a grayscale gradient for alpha masking.
-    pub fn to_alpha(&self) -> PdfGradient {
-        let to_luma = |stops: &[(Color, Ratio)]| {
-            stops
-                .iter()
-                .map(|&(c, w)| (Luma::new(c.alpha().unwrap_or(1.0), 1.0).into(), w))
-                .collect()
+    /// Converts the gradient to a grayscale gradient for alpha masking and
+    /// adjusts the transform to be relative to the current state.
+    fn into_alpha(mut self, ctx: &content::Builder) -> PdfGradient {
+        let stops = self
+            .gradient
+            .stops_ref()
+            .iter()
+            .map(|&(c, w)| (Luma::new(c.alpha().unwrap_or(1.0), 1.0).into(), w))
+            .collect();
+
+        match &mut self.gradient {
+            Gradient::Linear(linear) => {
+                let linear = Arc::make_mut(linear);
+                linear.stops = stops;
+                linear.space = ColorSpace::D65Gray;
+            }
+            Gradient::Radial(radial) => {
+                let radial = Arc::make_mut(radial);
+                radial.stops = stops;
+                radial.space = ColorSpace::D65Gray;
+            }
+            Gradient::Conic(conic) => {
+                let conic = Arc::make_mut(conic);
+                conic.stops = stops;
+                conic.space = ColorSpace::D65Gray;
+            }
         };
 
-        let alpha_gradient = match &self.gradient {
-            Gradient::Linear(linear) => Gradient::Linear(Arc::new(LinearGradient {
-                space: ColorSpace::D65Gray,
-                stops: to_luma(&linear.stops),
-                ..(**linear)
-            })),
-            Gradient::Radial(radial) => Gradient::Radial(Arc::new(RadialGradient {
-                space: ColorSpace::D65Gray,
-                stops: to_luma(&radial.stops),
-                ..(**radial)
-            })),
-            Gradient::Conic(conic) => Gradient::Conic(Arc::new(ConicGradient {
-                space: ColorSpace::D65Gray,
-                stops: to_luma(&conic.stops),
-                ..(**conic)
-            })),
-        };
+        // The gradient's transform already includes the current state's
+        // transformation matrix, so we invert it to get the pure gradient
+        // transform relative to the current state.
+        self.transform = self.transform.post_concat(ctx.state.transform.invert().unwrap());
 
-        PdfGradient {
-            transform: self.transform,
-            aspect_ratio: self.aspect_ratio,
-            gradient: alpha_gradient,
-            angle: self.angle,
-        }
+        self
     }
 }
 
@@ -104,7 +104,7 @@ pub fn write_gradients(
     (chunk, out)
 }
 
-// Writes a shading dictionary for a gradient.
+/// Writes a shading dictionary for a gradient.
 pub fn shading(
     context: &WithGlobalRefs,
     pdf_gradient: &PdfGradient,
@@ -296,15 +296,9 @@ impl PaintEncode for Gradient {
         ctx.content.set_fill_pattern(None, name);
 
         if self.uses_opacities() {
-            // The gradient transformation already includes the current state's
-            // transformation matrix, so we invert it to get the pure gradient
-            // transformation relative to the current state.
             ctx.set_softmask(Some(SoftMask {
-                stroke_thickness: Abs::zero(),
-                transform: gradient
-                    .transform
-                    .post_concat(ctx.state.transform.invert().unwrap()),
-                gradient: gradient.to_alpha(),
+                gradient: gradient.into_alpha(ctx),
+                bbox_expansion: Abs::zero()
             }))
         } else {
             ctx.set_softmask(None);
@@ -327,23 +321,18 @@ impl PaintEncode for Gradient {
         ctx.content.set_stroke_pattern(None, name);
 
         if self.uses_opacities() {
-            // Thickness of the stroke, including the miter limit as the soft
-            // mask has to fully cover the stroke.
-            let stroke_thickness = ctx
+            // The bounding box of the soft mask has to be expanded as it has
+            // to fully include the stroke. The maximum expansion is the miter
+            // limit times the thickness, divided by 2 as it is centered.
+            let bbox_expansion = ctx
                 .state
                 .stroke
                 .as_ref()
-                .map_or(Abs::zero(), |s| s.miter_limit.get() * s.thickness);
+                .map_or(Abs::zero(), |s| s.miter_limit.get() * s.thickness / 2.0);
 
-            // The gradient transformation already includes the current state's
-            // transformation matrix, so we invert it to get the pure gradient
-            // transformation relative to the current state.
             ctx.set_softmask(Some(SoftMask {
-                stroke_thickness,
-                transform: gradient
-                    .transform
-                    .post_concat(ctx.state.transform.invert().unwrap()),
-                gradient: gradient.to_alpha(),
+                gradient: gradient.into_alpha(ctx),
+                bbox_expansion,
             }))
         } else {
             ctx.set_softmask(None);

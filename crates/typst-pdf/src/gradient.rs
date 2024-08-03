@@ -3,16 +3,19 @@ use std::f32::consts::{PI, TAU};
 use std::sync::Arc;
 
 use ecow::eco_format;
+use pdf_writer::types::{MaskType, PaintType, TilingType};
+use pdf_writer::writers::ExtGraphicsState;
 use pdf_writer::{
     types::{ColorSpaceOperand, FunctionShadingType},
     writers::StreamShadingType,
     Filter, Finish, Name, Ref,
 };
+use pdf_writer::{Content, Rect};
 
-use typst::layout::{Abs, Angle, Point, Quadrant, Ratio, Transform};
+use typst::layout::{Abs, Angle, Point, Quadrant, Ratio, Size, Transform};
 use typst::utils::Numeric;
 use typst::visualize::{
-    Color, ColorSpace, Gradient, RatioOrAngle, RelativeTo, WeightedColor,
+    Color, ColorSpace, Gradient, Luma, RatioOrAngle, RelativeTo, WeightedColor,
 };
 
 use crate::color::{self, ColorSpaceExt, PaintEncode, QuantizedColor};
@@ -32,6 +35,8 @@ pub struct PdfGradient {
     pub gradient: Gradient,
     /// The corrected angle of the gradient.
     pub angle: Angle,
+    /// The size of the page this gradient is on.
+    pub page_size: Size,
 }
 
 /// Writes the actual gradients (shading patterns) to the PDF.
@@ -50,10 +55,16 @@ pub fn write_gradients(
             let PdfGradient { transform, gradient, .. } = pdf_gradient;
 
             let shading_pattern = chunk.alloc();
-            out.insert(pdf_gradient.clone(), shading_pattern);
-
             let shading =
                 shading(context, pdf_gradient, &mut chunk, color_space_of(gradient));
+
+            let pattern = if gradient.is_transparent() {
+                transparent_tiling(context, pdf_gradient, shading_pattern, &mut chunk)
+            } else {
+                shading_pattern
+            };
+
+            out.insert(pdf_gradient.clone(), pattern);
 
             chunk
                 .shading_pattern(shading_pattern)
@@ -65,8 +76,129 @@ pub fn write_gradients(
     (chunk, out)
 }
 
+/// Writes a tiling pattern for transparent gradients.
+fn transparent_tiling<'a>(
+    context: &WithGlobalRefs,
+    pdf_gradient: &PdfGradient,
+    shading_pattern: Ref,
+    chunk: &'a mut PdfChunk,
+) -> Ref {
+    const PATTERN_NAME: Name = Name(b"Sh");
+    const EXTGSTATE_NAME: Name = Name(b"Gs");
+
+    let page_width = pdf_gradient.page_size.x.to_f32();
+    let page_height = pdf_gradient.page_size.y.to_f32();
+
+    // Transform the gradient to a grayscale alpha gradient.
+    let alpha_gradient = {
+        let mut alpha_gradient = pdf_gradient.clone();
+
+        let to_alpha = |stops: &mut Vec<(Color, _)>| {
+            stops.iter_mut().for_each(|(color, _)| {
+                let alpha = color.alpha().unwrap_or(1.0);
+                *color = Color::from(Luma::new(alpha, 1.0));
+            });
+        };
+
+        match &mut alpha_gradient.gradient {
+            Gradient::Linear(linear) => {
+                Arc::make_mut(linear).space = ColorSpace::D65Gray;
+                to_alpha(&mut Arc::make_mut(linear).stops);
+            }
+            Gradient::Radial(radial) => {
+                Arc::make_mut(radial).space = ColorSpace::D65Gray;
+                to_alpha(&mut Arc::make_mut(radial).stops);
+            }
+            Gradient::Conic(conic) => {
+                Arc::make_mut(conic).space = ColorSpace::D65Gray;
+                to_alpha(&mut Arc::make_mut(conic).stops);
+            }
+        }
+
+        alpha_gradient
+    };
+
+    let alpha_shading =
+        shading(context, &alpha_gradient, chunk, alpha_gradient.gradient.space());
+
+    let alpha_shading_pattern = chunk.alloc();
+    chunk
+        .shading_pattern(alpha_shading_pattern)
+        .shading_ref(alpha_shading)
+        .matrix(transform_to_array(pdf_gradient.transform));
+
+    // Write the soft mask group.
+    // The content of the group is the alpha gradient filled on the full page.
+    let mut content = Content::new();
+    content
+        .set_parameters(EXTGSTATE_NAME)
+        .set_fill_color_space(ColorSpaceOperand::Pattern)
+        .set_fill_pattern(None, PATTERN_NAME)
+        .rect(0.0, 0.0, page_width, page_height)
+        .fill_nonzero();
+    let content = content.finish();
+
+    let soft_mask_ref = chunk.alloc();
+    let mut soft_mask = chunk.form_xobject(soft_mask_ref, &content);
+    let mut group = soft_mask.bbox(Rect::new(0.0, 0.0, page_width, page_height)).group();
+    let color_space = group.transparency().color_space();
+    color::write(
+        alpha_gradient.gradient.space(),
+        color_space,
+        &context.globals.color_functions,
+    );
+    group.finish();
+
+    let mut resources = soft_mask.resources();
+    resources.patterns().pair(PATTERN_NAME, alpha_shading_pattern);
+    resources
+        .ext_g_states()
+        .insert(EXTGSTATE_NAME)
+        .start::<ExtGraphicsState>()
+        .non_stroking_alpha(1.0)
+        .stroking_alpha(1.0)
+        .soft_mask_name(Name(b"None"));
+    resources.finish();
+    soft_mask.finish();
+
+    // Write the actual tiling pattern.
+    // The content of this pattern is the real gradient drawn on the full page.
+    let mut content = Content::new();
+    content
+        .set_parameters(EXTGSTATE_NAME)
+        .set_fill_color_space(ColorSpaceOperand::Pattern)
+        .set_fill_pattern(None, PATTERN_NAME)
+        .rect(0.0, 0.0, page_width, page_height)
+        .fill_nonzero();
+    let content = content.finish();
+
+    // The pattern itself is just a single tile with the size of the page.
+    let pattern_ref = chunk.alloc();
+    let mut pattern = chunk.tiling_pattern(pattern_ref, &content);
+    pattern
+        .paint_type(PaintType::Colored)
+        .tiling_type(TilingType::NoDistortion)
+        .bbox(Rect::new(0.0, 0.0, page_width, page_height))
+        .x_step(page_width)
+        .y_step(page_height);
+
+    let mut resources = pattern.resources();
+    resources.patterns().pair(PATTERN_NAME, shading_pattern);
+    resources
+        .ext_g_states()
+        .insert(EXTGSTATE_NAME)
+        .start::<ExtGraphicsState>()
+        .stroking_alpha(1.0)
+        .non_stroking_alpha(1.0)
+        .soft_mask()
+        .subtype(MaskType::Luminosity)
+        .group(soft_mask_ref);
+
+    pattern_ref
+}
+
 /// Writes a shading dictionary for a gradient.
-pub fn shading(
+fn shading(
     context: &WithGlobalRefs,
     pdf_gradient: &PdfGradient,
     chunk: &mut PdfChunk,
@@ -327,9 +459,14 @@ fn register_gradient(
             )),
         gradient: gradient.clone(),
         angle: Gradient::correct_aspect_ratio(rotation, size.aspect_ratio()),
+        page_size: ctx.size,
     };
 
     ctx.resources.colors.mark_as_used(color_space_of(gradient));
+
+    if gradient.is_transparent() {
+        ctx.resources.colors.mark_as_used(ColorSpace::D65Gray);
+    }
 
     ctx.resources.gradients.insert(pdf_gradient)
 }

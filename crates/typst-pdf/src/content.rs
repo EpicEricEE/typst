@@ -95,6 +95,8 @@ pub struct Builder<'a, R = ()> {
     pub(crate) resources: &'a mut Resources<R>,
     /// The PDF content stream that is being built.
     pub content: Content,
+    /// The initial size of the page.
+    pub size: Size,
     /// Current graphic state.
     state: State,
     /// Stack of saved graphic states.
@@ -110,6 +112,7 @@ impl<'a, R> Builder<'a, R> {
     pub fn new(resources: &'a mut Resources<R>, size: Size) -> Self {
         Builder {
             resources,
+            size,
             uses_opacities: false,
             content: Content::new(),
             state: State::new(size),

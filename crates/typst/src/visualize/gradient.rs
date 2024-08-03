@@ -835,6 +835,14 @@ impl Gradient {
         }
     }
 
+    /// Returns whether any of the stops in this gradient have transparency.
+    pub fn is_transparent(&self) -> bool {
+        self.stops_ref()
+            .iter()
+            .filter_map(|(color, _)| color.alpha())
+            .any(|alpha| alpha < 1.0)
+    }
+
     /// Returns the relative placement of this gradient, handling
     /// the special case of `auto`.
     pub fn unwrap_relative(&self, on_text: bool) -> RelativeTo {

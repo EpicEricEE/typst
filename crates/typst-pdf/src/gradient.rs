@@ -52,24 +52,20 @@ pub fn write_gradients(
                 continue;
             }
 
-            let PdfGradient { transform, gradient, .. } = pdf_gradient;
+            let shading_pattern = write_gradient(
+                context,
+                pdf_gradient,
+                &mut chunk,
+                color_space_of(&pdf_gradient.gradient),
+            );
 
-            let shading_pattern = chunk.alloc();
-            let shading =
-                shading(context, pdf_gradient, &mut chunk, color_space_of(gradient));
-
-            let pattern = if gradient.is_transparent() {
+            let pattern = if pdf_gradient.gradient.is_transparent() {
                 transparent_tiling(context, pdf_gradient, shading_pattern, &mut chunk)
             } else {
                 shading_pattern
             };
 
             out.insert(pdf_gradient.clone(), pattern);
-
-            chunk
-                .shading_pattern(shading_pattern)
-                .shading_ref(shading)
-                .matrix(transform_to_array(*transform));
         }
     });
 
@@ -118,14 +114,13 @@ fn transparent_tiling<'a>(
         alpha_gradient
     };
 
-    let alpha_shading =
-        shading(context, &alpha_gradient, chunk, alpha_gradient.gradient.space());
-
-    let alpha_shading_pattern = chunk.alloc();
-    chunk
-        .shading_pattern(alpha_shading_pattern)
-        .shading_ref(alpha_shading)
-        .matrix(transform_to_array(pdf_gradient.transform));
+    // Write the alpha gradient.
+    let alpha_shading_pattern = write_gradient(
+        context,
+        &alpha_gradient,
+        chunk,
+        color_space_of(&alpha_gradient.gradient),
+    );
 
     // Write the soft mask group.
     // The content of the group is the alpha gradient filled on the full page.
@@ -197,20 +192,22 @@ fn transparent_tiling<'a>(
     pattern_ref
 }
 
-/// Writes a shading dictionary for a gradient.
-fn shading(
+/// Writes a shading single gradient.
+fn write_gradient(
     context: &WithGlobalRefs,
     pdf_gradient: &PdfGradient,
     chunk: &mut PdfChunk,
     color_space: ColorSpace,
 ) -> Ref {
     let shading = chunk.alloc();
+
     let PdfGradient { aspect_ratio, gradient, angle, .. } = pdf_gradient;
 
-    match &gradient {
+    let mut shading_pattern = match &gradient {
         Gradient::Linear(_) => {
             let shading_function = shading_function(gradient, chunk, color_space);
-            let mut shading = chunk.function_shading(shading);
+            let mut shading_pattern = chunk.shading_pattern(shading);
+            let mut shading = shading_pattern.function_shading();
             shading.shading_type(FunctionShadingType::Axial);
 
             color::write(
@@ -240,10 +237,12 @@ fn shading(
                 .extend([true; 2]);
 
             shading.finish();
+            shading_pattern
         }
         Gradient::Radial(radial) => {
             let shading_function = shading_function(gradient, chunk, color_space);
-            let mut shading = chunk.function_shading(shading);
+            let mut shading_pattern = chunk.shading_pattern(shading);
+            let mut shading = shading_pattern.function_shading();
             shading.shading_type(FunctionShadingType::Radial);
 
             color::write(
@@ -266,20 +265,22 @@ fn shading(
                 .extend([true; 2]);
 
             shading.finish();
+            shading_pattern
         }
         Gradient::Conic(_) => {
             let vertices = compute_vertex_stream(gradient, *aspect_ratio);
 
-            let mut shading = chunk.stream_shading(shading, &vertices);
+            let stream_shading_id = chunk.alloc();
+            let mut stream_shading = chunk.stream_shading(stream_shading_id, &vertices);
 
             color::write(
                 color_space,
-                shading.color_space(),
+                stream_shading.color_space(),
                 &context.globals.color_functions,
             );
 
             let range = color_space.range();
-            shading
+            stream_shading
                 .bits_per_coordinate(16)
                 .bits_per_component(16)
                 .bits_per_flag(8)
@@ -288,10 +289,15 @@ fn shading(
                 .anti_alias(gradient.anti_alias())
                 .filter(Filter::FlateDecode);
 
-            shading.finish();
+            stream_shading.finish();
+
+            let mut shading_pattern = chunk.shading_pattern(shading);
+            shading_pattern.shading_ref(stream_shading_id);
+            shading_pattern
         }
     };
 
+    shading_pattern.matrix(transform_to_array(pdf_gradient.transform));
     shading
 }
 

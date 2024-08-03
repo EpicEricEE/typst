@@ -73,11 +73,11 @@ pub fn write_gradients(
 }
 
 /// Writes a tiling pattern for transparent gradients.
-fn transparent_tiling<'a>(
+fn transparent_tiling(
     context: &WithGlobalRefs,
     pdf_gradient: &PdfGradient,
     shading_pattern: Ref,
-    chunk: &'a mut PdfChunk,
+    chunk: &mut PdfChunk,
 ) -> Ref {
     const PATTERN_NAME: Name = Name(b"Gr");
     const EXTGSTATE_NAME: Name = Name(b"Gs");

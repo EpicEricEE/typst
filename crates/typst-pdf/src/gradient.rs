@@ -144,7 +144,10 @@ fn transparent_tiling(
         &context.globals.color_functions,
     );
 
-    soft_mask.resources().patterns().pair(PATTERN_NAME, alpha_shading_pattern);
+    soft_mask
+        .resources()
+        .patterns()
+        .pair(PATTERN_NAME, alpha_shading_pattern);
     soft_mask.finish();
 
     // Write the actual tiling pattern.

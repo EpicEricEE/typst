@@ -79,7 +79,7 @@ fn transparent_tiling<'a>(
     shading_pattern: Ref,
     chunk: &'a mut PdfChunk,
 ) -> Ref {
-    const PATTERN_NAME: Name = Name(b"Sh");
+    const PATTERN_NAME: Name = Name(b"Gr");
     const EXTGSTATE_NAME: Name = Name(b"Gs");
 
     let page_width = pdf_gradient.page_size.x.to_f32();
@@ -126,7 +126,6 @@ fn transparent_tiling<'a>(
     // The content of the group is the alpha gradient filled on the full page.
     let mut content = Content::new();
     content
-        .set_parameters(EXTGSTATE_NAME)
         .set_fill_color_space(ColorSpaceOperand::Pattern)
         .set_fill_pattern(None, PATTERN_NAME)
         .rect(0.0, 0.0, page_width, page_height)
@@ -143,17 +142,7 @@ fn transparent_tiling<'a>(
         &context.globals.color_functions,
     );
     group.finish();
-
-    let mut resources = soft_mask.resources();
-    resources.patterns().pair(PATTERN_NAME, alpha_shading_pattern);
-    resources
-        .ext_g_states()
-        .insert(EXTGSTATE_NAME)
-        .start::<ExtGraphicsState>()
-        .non_stroking_alpha(1.0)
-        .stroking_alpha(1.0)
-        .soft_mask_name(Name(b"None"));
-    resources.finish();
+    soft_mask.resources().patterns().pair(PATTERN_NAME, alpha_shading_pattern);
     soft_mask.finish();
 
     // Write the actual tiling pattern.
@@ -183,8 +172,6 @@ fn transparent_tiling<'a>(
         .ext_g_states()
         .insert(EXTGSTATE_NAME)
         .start::<ExtGraphicsState>()
-        .stroking_alpha(1.0)
-        .non_stroking_alpha(1.0)
         .soft_mask()
         .subtype(MaskType::Luminosity)
         .group(soft_mask_ref);

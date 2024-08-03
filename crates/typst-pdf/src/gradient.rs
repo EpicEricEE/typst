@@ -182,7 +182,7 @@ fn transparent_tiling<'a>(
     pattern_ref
 }
 
-/// Writes a shading single gradient.
+/// Writes a single gradient shading pattern.
 fn write_gradient(
     context: &WithGlobalRefs,
     pdf_gradient: &PdfGradient,

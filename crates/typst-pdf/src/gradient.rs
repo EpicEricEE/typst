@@ -130,18 +130,20 @@ fn transparent_tiling<'a>(
         .set_fill_pattern(None, PATTERN_NAME)
         .rect(0.0, 0.0, page_width, page_height)
         .fill_nonzero();
-    let content = content.finish();
+    let content = deflate(&content.finish());
 
     let soft_mask_ref = chunk.alloc();
     let mut soft_mask = chunk.form_xobject(soft_mask_ref, &content);
-    let mut group = soft_mask.bbox(Rect::new(0.0, 0.0, page_width, page_height)).group();
-    let color_space = group.transparency().color_space();
+    soft_mask
+        .bbox(Rect::new(0.0, 0.0, page_width, page_height))
+        .filter(Filter::FlateDecode);
+
     color::write(
         alpha_gradient.gradient.space(),
-        color_space,
+        soft_mask.group().transparency().color_space(),
         &context.globals.color_functions,
     );
-    group.finish();
+
     soft_mask.resources().patterns().pair(PATTERN_NAME, alpha_shading_pattern);
     soft_mask.finish();
 
@@ -154,7 +156,7 @@ fn transparent_tiling<'a>(
         .set_fill_pattern(None, PATTERN_NAME)
         .rect(0.0, 0.0, page_width, page_height)
         .fill_nonzero();
-    let content = content.finish();
+    let content = deflate(&content.finish());
 
     // The pattern itself is just a single tile with the size of the page.
     let pattern_ref = chunk.alloc();
@@ -164,7 +166,8 @@ fn transparent_tiling<'a>(
         .tiling_type(TilingType::NoDistortion)
         .bbox(Rect::new(0.0, 0.0, page_width, page_height))
         .x_step(page_width)
-        .y_step(page_height);
+        .y_step(page_height)
+        .filter(Filter::FlateDecode);
 
     let mut resources = pattern.resources();
     resources.patterns().pair(PATTERN_NAME, shading_pattern);

@@ -9,7 +9,7 @@ use pdf_writer::{
     Filter, Finish, Name, Ref,
 };
 
-use typst::layout::{Abs, Angle, Point, Quadrant, Ratio, Transform};
+use typst::layout::{Abs, Angle, Point, Quadrant, Ratio, Size, Transform};
 use typst::utils::Numeric;
 use typst::visualize::{
     Color, ColorSpace, Gradient, RatioOrAngle, RelativeTo, WeightedColor,
@@ -32,6 +32,8 @@ pub struct PdfGradient {
     pub gradient: Gradient,
     /// The corrected angle of the gradient.
     pub angle: Angle,
+    /// The size of the page this gradient is on.
+    pub page_size: Size,
 }
 
 /// Writes the actual gradients (shading patterns) to the PDF.
@@ -63,7 +65,7 @@ fn write_gradient(
 ) -> Ref {
     let shading = chunk.alloc();
 
-    let PdfGradient { transform, aspect_ratio, gradient, angle } = pdf_gradient;
+    let PdfGradient { transform, aspect_ratio, gradient, angle, .. } = pdf_gradient;
     let color_space = color_space_of(gradient);
 
     let mut shading_pattern = match &gradient {
@@ -104,8 +106,7 @@ fn write_gradient(
             shading_pattern
         }
         Gradient::Radial(radial) => {
-            let shading_function =
-                shading_function(gradient, chunk, color_space_of(gradient));
+            let shading_function = shading_function(gradient, chunk, color_space);
             let mut shading_pattern = chunk.chunk.shading_pattern(shading);
             let mut shading = shading_pattern.function_shading();
             shading.shading_type(FunctionShadingType::Radial);
@@ -332,6 +333,7 @@ fn register_gradient(
             )),
         gradient: gradient.clone(),
         angle: Gradient::correct_aspect_ratio(rotation, size.aspect_ratio()),
+        page_size: ctx.size,
     };
 
     ctx.resources.colors.mark_as_used(color_space_of(gradient));

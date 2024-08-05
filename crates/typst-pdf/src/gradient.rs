@@ -3,16 +3,16 @@ use std::f32::consts::{PI, TAU};
 use std::sync::Arc;
 
 use ecow::eco_format;
-use pdf_writer::{
-    types::{ColorSpaceOperand, FunctionShadingType},
-    writers::StreamShadingType,
-    Filter, Finish, Name, Ref,
+use pdf_writer::types::{
+    ColorSpaceOperand, FunctionShadingType, MaskType, PaintType, TilingType,
 };
+use pdf_writer::writers::{ExtGraphicsState, StreamShadingType};
+use pdf_writer::{Content, Filter, Finish, Name, Rect, Ref};
 
 use typst::layout::{Abs, Angle, Point, Quadrant, Ratio, Size, Transform};
 use typst::utils::Numeric;
 use typst::visualize::{
-    Color, ColorSpace, Gradient, RatioOrAngle, RelativeTo, WeightedColor,
+    Color, ColorSpace, Gradient, Luma, RatioOrAngle, RelativeTo, WeightedColor,
 };
 
 use crate::color::{self, ColorSpaceExt, PaintEncode, QuantizedColor};
@@ -49,7 +49,11 @@ pub fn write_gradients(
                 continue;
             }
 
-            let shading = write_gradient(context, &mut chunk, pdf_gradient);
+            let mut shading = write_gradient(context, &mut chunk, pdf_gradient);
+            if pdf_gradient.gradient.is_transparent() {
+                shading = transparent_tiling(context, &mut chunk, pdf_gradient, shading)
+            }
+
             out.insert(pdf_gradient.clone(), shading);
         }
     });
@@ -167,6 +171,114 @@ fn write_gradient(
 
     shading_pattern.matrix(transform_to_array(*transform));
     shading
+}
+
+/// Writes a tiling pattern for transparent gradients.
+fn transparent_tiling(
+    context: &WithGlobalRefs,
+    chunk: &mut PdfChunk,
+    pdf_gradient: &PdfGradient,
+    shading: Ref,
+) -> Ref {
+    const PATTERN_NAME: Name = Name(b"Gr");
+    const EXTGSTATE_NAME: Name = Name(b"Gs");
+
+    let page_width = pdf_gradient.page_size.x.to_f32();
+    let page_height = pdf_gradient.page_size.y.to_f32();
+
+    // Transform the gradient to a grayscale alpha gradient.
+    let alpha_gradient = {
+        let mut alpha_gradient = pdf_gradient.clone();
+
+        let to_alpha = |stops: &mut Vec<(Color, _)>| {
+            stops.iter_mut().for_each(|(color, _)| {
+                let alpha = color.alpha().unwrap_or(1.0);
+                *color = Color::from(Luma::new(alpha, 1.0));
+            });
+        };
+
+        match &mut alpha_gradient.gradient {
+            Gradient::Linear(linear) => {
+                Arc::make_mut(linear).space = ColorSpace::D65Gray;
+                to_alpha(&mut Arc::make_mut(linear).stops);
+            }
+            Gradient::Radial(radial) => {
+                Arc::make_mut(radial).space = ColorSpace::D65Gray;
+                to_alpha(&mut Arc::make_mut(radial).stops);
+            }
+            Gradient::Conic(conic) => {
+                Arc::make_mut(conic).space = ColorSpace::D65Gray;
+                to_alpha(&mut Arc::make_mut(conic).stops);
+            }
+        }
+
+        alpha_gradient
+    };
+
+    // Write the alpha gradient.
+    let alpha_shading = write_gradient(context, chunk, &alpha_gradient);
+
+    // Write the soft mask group.
+    // The content of the group is the alpha gradient filled on the full page.
+    let mut content = Content::new();
+    content
+        .set_fill_color_space(ColorSpaceOperand::Pattern)
+        .set_fill_pattern(None, PATTERN_NAME)
+        .rect(0.0, 0.0, page_width, page_height)
+        .fill_nonzero();
+    let content = deflate(&content.finish());
+
+    let soft_mask_ref = chunk.alloc();
+    let mut soft_mask = chunk.form_xobject(soft_mask_ref, &content);
+    soft_mask
+        .bbox(Rect::new(0.0, 0.0, page_width, page_height))
+        .filter(Filter::FlateDecode);
+
+    color::write(
+        alpha_gradient.gradient.space(),
+        soft_mask.group().transparency().color_space(),
+        &context.globals.color_functions,
+    );
+
+    soft_mask
+        .resources()
+        .patterns()
+        .pair(PATTERN_NAME, alpha_shading);
+    soft_mask.finish();
+
+    // Write the actual tiling pattern.
+    // The content of this pattern is the real gradient drawn on the full page.
+    let mut content = Content::new();
+    content
+        .set_parameters(EXTGSTATE_NAME)
+        .set_fill_color_space(ColorSpaceOperand::Pattern)
+        .set_fill_pattern(None, PATTERN_NAME)
+        .rect(0.0, 0.0, page_width, page_height)
+        .fill_nonzero();
+    let content = deflate(&content.finish());
+
+    // The pattern itself is just a single tile with the size of the page.
+    let pattern_ref = chunk.alloc();
+    let mut pattern = chunk.tiling_pattern(pattern_ref, &content);
+    pattern
+        .paint_type(PaintType::Colored)
+        .tiling_type(TilingType::NoDistortion)
+        .bbox(Rect::new(0.0, 0.0, page_width, page_height))
+        .x_step(page_width)
+        .y_step(page_height)
+        .filter(Filter::FlateDecode);
+
+    let mut resources = pattern.resources();
+    resources.patterns().pair(PATTERN_NAME, shading);
+    resources
+        .ext_g_states()
+        .insert(EXTGSTATE_NAME)
+        .start::<ExtGraphicsState>()
+        .soft_mask()
+        .subtype(MaskType::Luminosity)
+        .group(soft_mask_ref);
+
+    pattern_ref
 }
 
 /// Writes an expotential or stitched function that expresses the gradient.

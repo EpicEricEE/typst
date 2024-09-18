@@ -44,6 +44,33 @@ break you can force a break without #linebreak(justify: true)
 breaking justification. #linebreak(justify: false)
 Nice!
 
+--- linebreak-weak ---
+// Test weak break behaving like normal break.
+First line.
+#linebreak(weak: true)
+Second line.
+
+--- linebreak-weak-start ---
+// Test weak break at start of paragraph.
+#linebreak(weak: true)
+Still in the first line.
+
+--- linebreak-weak-end ---
+// Test weak break at end of paragraph.
+Only a single line here.
+#linebreak(weak: true)
+#linebreak(weak: true)
+
+--- linebreak-weak-consecutive ---
+// Test interaction between weak and strong breaks.
+First line.
+#linebreak(weak: true)
+#linebreak()
+Second line.
+#linebreak()
+#linebreak(weak: true)
+Third line.
+
 --- linebreak-thai ---
 // Test linebreak for East Asian languages
 ทีวีตรวจทานนอร์ทแฟรีเลคเชอร์โกลด์อัลบัมเชอร์รี่เย้วสโตร์กฤษณ์เคลมเยอบีร่าพ่อค้าบลูเบอร์รี่สหัสวรรษโฮปแคนูโยโย่จูนสตรอว์เบอร์รีซื่อบื้อเยนแบ็กโฮเป็นไงโดนัททอมสเตริโอแคนูวิทย์แดรี่โดนัทวิทย์แอปพริคอทเซอร์ไพรส์ไฮบริดกิฟท์อินเตอร์โซนเซอร์วิสเทียมทานโคโยตี้ม็อบเที่ยงคืนบุญคุณ

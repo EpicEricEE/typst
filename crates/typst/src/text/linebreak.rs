@@ -35,6 +35,13 @@ pub struct LinebreakElem {
     /// ```
     #[default(false)]
     pub justify: bool,
+
+    /// If `{true}`, the line break is skipped if the current line is already
+    /// empty. When combined with a non-weak line break, the weak line break is
+    /// ignored and the [justify]($linebreak.justify) parameter is determined
+    /// by the non-weak line break.
+    #[default(false)]
+    pub weak: bool,
 }
 
 impl LinebreakElem {

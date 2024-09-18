@@ -96,6 +96,9 @@ pub enum Segment<'a> {
     /// One or multiple collapsed text children. Stores how long the segment is
     /// (in bytes of the full text string).
     Text(usize, StyleChain<'a>),
+    /// A line break. Stores the number of bytes in the full text string, and
+    /// whether it is weak.
+    Break(usize, bool, StyleChain<'a>),
     /// An already prepared item.
     Item(Item<'a>),
 }
@@ -105,6 +108,7 @@ impl Segment<'_> {
     pub fn textual_len(&self) -> usize {
         match self {
             Self::Text(len, _) => *len,
+            Self::Break(len, _, _) => *len,
             Self::Item(item) => item.textual_len(),
         }
     }
@@ -183,8 +187,16 @@ pub fn collect<'a>(
                 ),
             });
         } else if let Some(elem) = child.to_packed::<LinebreakElem>() {
-            collector
-                .push_text(if elem.justify(styles) { "\u{2028}" } else { "\n" }, styles);
+            let weak = elem.weak(styles);
+            match collector.segments.last() {
+                None | Some(Segment::Break(..)) if weak => continue,
+                Some(Segment::Break(_, true, _)) if !weak => {
+                    collector.pop();
+                }
+                _ => {}
+            }
+
+            collector.push_break(elem.justify(styles), weak, styles);
         } else if let Some(elem) = child.to_packed::<SmartQuoteElem>() {
             let double = elem.double(styles);
             if elem.enabled(styles) {
@@ -273,6 +285,12 @@ impl<'a> Collector<'a> {
         self.push_segment(Segment::Item(item));
     }
 
+    fn push_break(&mut self, justify: bool, weak: bool, styles: StyleChain<'a>) {
+        let char = if justify { '\u{2028}' } else { '\n' };
+        self.full.push(char);
+        self.push_segment(Segment::Break(char.len_utf8(), weak, styles));
+    }
+
     fn push_segment(&mut self, segment: Segment<'a>) {
         match (self.segments.last_mut(), &segment) {
             // Merge adjacent text segments with the same styles.
@@ -292,6 +310,12 @@ impl<'a> Collector<'a> {
 
             _ => self.segments.push(segment),
         }
+    }
+
+    fn pop(&mut self) -> Option<Segment<'a>> {
+        self.segments.pop().inspect(|segment| {
+            self.full.truncate(self.full.len() - segment.textual_len());
+        })
     }
 }
 

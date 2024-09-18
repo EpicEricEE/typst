@@ -105,7 +105,7 @@ pub fn prepare<'a>(
         let range = cursor..end;
 
         match segment {
-            Segment::Text(_, styles) => {
+            Segment::Text(_, styles) | Segment::Break(.., styles) => {
                 shape_range(&mut items, engine, text, &bidi, range, styles);
             }
             Segment::Item(item) => items.push((range, item)),

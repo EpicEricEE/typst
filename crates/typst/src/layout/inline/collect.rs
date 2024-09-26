@@ -86,6 +86,17 @@ impl<'a> Item<'a> {
             Self::Skip(_) => Abs::zero(),
         }
     }
+
+    /// Whether the item is invisible.
+    pub fn is_invisible(&self) -> bool {
+        matches!(
+            self,
+            Self::Absolute(_, _)
+                | Self::Fractional(_, None)
+                | Self::Tag(_)
+                | Self::Skip(_)
+        )
+    }
 }
 
 /// An item or not-yet shaped text. We can't shape text until we have collected
@@ -188,12 +199,22 @@ pub fn collect<'a>(
             });
         } else if let Some(elem) = child.to_packed::<LinebreakElem>() {
             let weak = elem.weak(styles);
-            match collector.segments.last() {
-                None | Some(Segment::Break(..)) if weak => continue,
-                Some(Segment::Break(_, true, _)) if !weak => {
-                    collector.pop();
+            if weak {
+                // Skip this weak line breaks if all previous segments since
+                // the last explicit break are invisible items.
+                let skip = collector
+                    .segments
+                    .iter()
+                    .rev()
+                    .take_while(|segment| !matches!(segment, Segment::Break(..)))
+                    .all(|s| matches!(s, Segment::Item(item) if item.is_invisible()));
+
+                if skip {
+                    continue;
                 }
-                _ => {}
+            } else if matches!(collector.segments.last(), Some(Segment::Break(_, true, _))) {
+                // Remove preceding weak line break to replace it with this one.
+                collector.pop();
             }
 
             collector.push_break(elem.justify(styles), weak, styles);

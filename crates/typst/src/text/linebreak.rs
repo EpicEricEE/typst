@@ -3,9 +3,9 @@ use crate::utils::singleton;
 
 /// Inserts a line break.
 ///
-/// Advances the paragraph to the next line. A single trailing line break at the
-/// end of a paragraph is ignored, but more than one creates additional empty
-/// lines.
+/// Advances the paragraph to the next line. A single trailing line break at
+/// the end of a paragraph is ignored, but more than one creates additional
+/// empty lines.
 ///
 /// # Example
 /// ```example
@@ -15,9 +15,9 @@ use crate::utils::singleton;
 /// ```
 ///
 /// # Syntax
-/// This function also has dedicated syntax: To insert a line break, simply write
-/// a backslash followed by whitespace. This always creates an unjustified
-/// break.
+/// This function also has dedicated syntax: To insert a line break, simply
+/// write a backslash followed by whitespace. This always creates an
+/// unjustified break.
 #[elem(title = "Line Break")]
 pub struct LinebreakElem {
     /// Whether to justify the line before the break.
@@ -37,9 +37,10 @@ pub struct LinebreakElem {
     pub justify: bool,
 
     /// If `{true}`, the line break is skipped if the current line is already
-    /// empty. When combined with a non-weak line break, the weak line break is
-    /// ignored and the [justify]($linebreak.justify) parameter is determined
-    /// by the non-weak line break.
+    /// empty or only contains [horizontal spacing]($h).
+    ///
+    /// A directly following non-weak line break will replace the weak line
+    /// break and decide on the [justify]($linebreak.justify) parameter.
     #[default(false)]
     pub weak: bool,
 }

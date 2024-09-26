@@ -71,6 +71,18 @@ Second line.
 #linebreak(weak: true)
 Third line.
 
+--- linebreak-weak-spacing ---
+/// Test weak break in lines containing spacing.
+#set par(justify: true)
+#par(hanging-indent: 1em)[
+  #linebreak(weak: true)
+  This is still the first line, even with spacing.
+]
+#par(first-line-indent: 1em)[
+  #linebreak(weak: true)
+  This is still the first line, even with spacing.
+]
+
 --- linebreak-thai ---
 // Test linebreak for East Asian languages
 ทีวีตรวจทานนอร์ทแฟรีเลคเชอร์โกลด์อัลบัมเชอร์รี่เย้วสโตร์กฤษณ์เคลมเยอบีร่าพ่อค้าบลูเบอร์รี่สหัสวรรษโฮปแคนูโยโย่จูนสตรอว์เบอร์รีซื่อบื้อเยนแบ็กโฮเป็นไงโดนัททอมสเตริโอแคนูวิทย์แดรี่โดนัทวิทย์แอปพริคอทเซอร์ไพรส์ไฮบริดกิฟท์อินเตอร์โซนเซอร์วิสเทียมทานโคโยตี้ม็อบเที่ยงคืนบุญคุณ

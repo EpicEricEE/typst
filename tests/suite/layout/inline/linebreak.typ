@@ -50,26 +50,18 @@ First line.
 #linebreak(weak: true)
 Second line.
 
+--- linebreak-weak-consecutive ---
+// Test interaction between weak and strong breaks.
+First line.
+#linebreak()
+#linebreak(weak: true)
+#linebreak(weak: true)
+Second line.
+
 --- linebreak-weak-start ---
 // Test weak break at start of paragraph.
 #linebreak(weak: true)
 Still in the first line.
-
---- linebreak-weak-end ---
-// Test weak break at end of paragraph.
-Only a single line here.
-#linebreak(weak: true)
-#linebreak(weak: true)
-
---- linebreak-weak-consecutive ---
-// Test interaction between weak and strong breaks.
-First line.
-#linebreak(weak: true)
-#linebreak()
-Second line.
-#linebreak()
-#linebreak(weak: true)
-Third line.
 
 --- linebreak-weak-spacing ---
 /// Test weak break in lines containing spacing.

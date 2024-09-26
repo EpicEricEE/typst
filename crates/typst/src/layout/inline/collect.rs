@@ -107,9 +107,8 @@ pub enum Segment<'a> {
     /// One or multiple collapsed text children. Stores how long the segment is
     /// (in bytes of the full text string).
     Text(usize, StyleChain<'a>),
-    /// A line break. Stores the number of bytes in the full text string, and
-    /// whether it is weak.
-    Break(usize, bool, StyleChain<'a>),
+    /// A line break. Stores the number of bytes of the new line character.
+    Break(usize, StyleChain<'a>),
     /// An already prepared item.
     Item(Item<'a>),
 }
@@ -119,7 +118,7 @@ impl Segment<'_> {
     pub fn textual_len(&self) -> usize {
         match self {
             Self::Text(len, _) => *len,
-            Self::Break(len, _, _) => *len,
+            Self::Break(len, _) => *len,
             Self::Item(item) => item.textual_len(),
         }
     }
@@ -198,26 +197,21 @@ pub fn collect<'a>(
                 ),
             });
         } else if let Some(elem) = child.to_packed::<LinebreakElem>() {
-            let weak = elem.weak(styles);
-            if weak {
-                // Skip this weak line breaks if all previous segments since
-                // the last explicit break are invisible items.
-                let skip = collector
+            if elem.weak(styles) {
+                // Skip this weak line break if all previous segments since the
+                // last explicit break are invisible items.
+                if collector
                     .segments
                     .iter()
                     .rev()
                     .take_while(|segment| !matches!(segment, Segment::Break(..)))
-                    .all(|s| matches!(s, Segment::Item(item) if item.is_invisible()));
-
-                if skip {
+                    .all(|s| matches!(s, Segment::Item(item) if item.is_invisible()))
+                {
                     continue;
                 }
-            } else if matches!(collector.segments.last(), Some(Segment::Break(_, true, _))) {
-                // Remove preceding weak line break to replace it with this one.
-                collector.pop();
             }
 
-            collector.push_break(elem.justify(styles), weak, styles);
+            collector.push_break(elem.justify(styles), styles);
         } else if let Some(elem) = child.to_packed::<SmartQuoteElem>() {
             let double = elem.double(styles);
             if elem.enabled(styles) {
@@ -306,10 +300,10 @@ impl<'a> Collector<'a> {
         self.push_segment(Segment::Item(item));
     }
 
-    fn push_break(&mut self, justify: bool, weak: bool, styles: StyleChain<'a>) {
+    fn push_break(&mut self, justify: bool, styles: StyleChain<'a>) {
         let char = if justify { '\u{2028}' } else { '\n' };
         self.full.push(char);
-        self.push_segment(Segment::Break(char.len_utf8(), weak, styles));
+        self.push_segment(Segment::Break(char.len_utf8(), styles));
     }
 
     fn push_segment(&mut self, segment: Segment<'a>) {
@@ -331,12 +325,6 @@ impl<'a> Collector<'a> {
 
             _ => self.segments.push(segment),
         }
-    }
-
-    fn pop(&mut self) -> Option<Segment<'a>> {
-        self.segments.pop().inspect(|segment| {
-            self.full.truncate(self.full.len() - segment.textual_len());
-        })
     }
 }
 

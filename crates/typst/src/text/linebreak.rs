@@ -38,9 +38,6 @@ pub struct LinebreakElem {
 
     /// If `{true}`, the line break is skipped if the current line is already
     /// empty or only contains [horizontal spacing]($h).
-    ///
-    /// A directly following non-weak line break will replace the weak line
-    /// break and decide on the [justify]($linebreak.justify) parameter.
     #[default(false)]
     pub weak: bool,
 }

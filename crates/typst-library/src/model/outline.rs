@@ -527,8 +527,10 @@ impl Show for Packed<OutlineEntry> {
         }
 
         // Add filler symbols between the section name and page number.
+        // A word joiner and no-break spaces are used to avoid line breaks
+        // around the filler/spacer.
         if let Some(filler) = self.fill() {
-            seq.push(SpaceElem::shared().clone());
+            seq.push(TextElem::packed("\u{00A0}"));
             seq.push(
                 BoxElem::new()
                     .with_body(Some(filler.clone()))
@@ -536,9 +538,10 @@ impl Show for Packed<OutlineEntry> {
                     .pack()
                     .spanned(self.span()),
             );
-            seq.push(SpaceElem::shared().clone());
+            seq.push(TextElem::packed("\u{2060}\u{00A0}"));
         } else {
             seq.push(HElem::new(Fr::one().into()).pack().spanned(self.span()));
+            seq.push(TextElem::packed("\u{2060}"));
         }
 
         // Add the page number.

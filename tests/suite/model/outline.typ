@@ -154,6 +154,11 @@ A
 #outline(target: metadata)
 #metadata("hello")
 
+--- issue-2048-outline-break-after-fill ---
+#show heading: none
+#outline()
+= Would have overflowed
+
 --- issue-2530-outline-entry-panic-text ---
 // Outline entry (pre-emptive)
 // Error: 2-48 cannot outline text

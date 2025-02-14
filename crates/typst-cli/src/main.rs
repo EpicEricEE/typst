@@ -2,9 +2,12 @@ mod args;
 mod compile;
 mod download;
 mod fonts;
+mod greet;
 mod init;
 mod package;
 mod query;
+#[cfg(feature = "http-server")]
+mod server;
 mod terminal;
 mod timings;
 #[cfg(feature = "self-update")]
@@ -15,11 +18,12 @@ mod world;
 use std::cell::Cell;
 use std::io::{self, Write};
 use std::process::ExitCode;
+use std::sync::LazyLock;
 
+use clap::error::ErrorKind;
 use clap::Parser;
 use codespan_reporting::term;
 use codespan_reporting::term::termcolor::WriteColor;
-use once_cell::sync::Lazy;
 use typst::diag::HintedStrResult;
 
 use crate::args::{CliArguments, Command};
@@ -30,11 +34,22 @@ thread_local! {
     static EXIT: Cell<ExitCode> = const { Cell::new(ExitCode::SUCCESS) };
 }
 
-/// The parsed commandline arguments.
-static ARGS: Lazy<CliArguments> = Lazy::new(CliArguments::parse);
+/// The parsed command line arguments.
+static ARGS: LazyLock<CliArguments> = LazyLock::new(|| {
+    CliArguments::try_parse().unwrap_or_else(|error| {
+        if error.kind() == ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand {
+            crate::greet::greet();
+        }
+        error.exit();
+    })
+});
 
 /// Entry point.
 fn main() -> ExitCode {
+    // Handle SIGPIPE
+    // https://stackoverflow.com/questions/65755853/simple-word-count-rust-program-outputs-valid-stdout-but-panicks-when-piped-to-he/65760807
+    sigpipe::reset();
+
     let res = dispatch();
 
     if let Err(msg) = res {
@@ -47,14 +62,14 @@ fn main() -> ExitCode {
 
 /// Execute the requested command.
 fn dispatch() -> HintedStrResult<()> {
-    let timer = Timer::new(&ARGS);
+    let mut timer = Timer::new(&ARGS);
 
     match &ARGS.command {
-        Command::Compile(command) => crate::compile::compile(timer, command.clone())?,
-        Command::Watch(command) => crate::watch::watch(timer, command.clone())?,
+        Command::Compile(command) => crate::compile::compile(&mut timer, command)?,
+        Command::Watch(command) => crate::watch::watch(&mut timer, command)?,
         Command::Init(command) => crate::init::init(command)?,
         Command::Query(command) => crate::query::query(command)?,
-        Command::Fonts(command) => crate::fonts::fonts(command)?,
+        Command::Fonts(command) => crate::fonts::fonts(command),
         Command::Update(command) => crate::update::update(command)?,
     }
 
@@ -85,8 +100,9 @@ fn print_error(msg: &str) -> io::Result<()> {
 
 #[cfg(not(feature = "self-update"))]
 mod update {
-    use crate::args::UpdateCommand;
     use typst::diag::{bail, StrResult};
+
+    use crate::args::UpdateCommand;
 
     pub fn update(_: &UpdateCommand) -> StrResult<()> {
         bail!(

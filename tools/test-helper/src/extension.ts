@@ -121,7 +121,7 @@ class TestHelper {
     const lenses = [];
     for (let nr = 0; nr < document.lineCount; nr++) {
       const line = document.lineAt(nr);
-      const re = /^--- ([\d\w-]+) ---$/;
+      const re = /^--- ([\d\w-]+)( [\d\w-]+)* ---$/;
       const m = line.text.match(re);
       if (!m) {
         continue;
@@ -143,7 +143,7 @@ class TestHelper {
         }),
         new vscode.CodeLens(line.range, {
           title: "Save",
-          tooltip: "Run and view the test and save the reference image",
+          tooltip: "Run and view the test and save the reference output",
           command: "typst-test-helper.saveFromLens",
           arguments: [name],
         }),
@@ -371,7 +371,7 @@ class TestHelper {
     );
   }
 
-  // Confgiures whether the run and save buttons are enabled.
+  // Configures whether the run and save buttons are enabled.
   private setRunButtonEnabled(enabled: boolean) {
     vscode.commands.executeCommand(
       "setContext",
@@ -474,7 +474,7 @@ function getWebviewContent(
             data-vscode-context='{"webviewSection":"png"}'
             src="${webViewSrcs.png}"
             alt="Placeholder"
-          />
+          >
         </div>
 
         <div>
@@ -484,7 +484,7 @@ function getWebviewContent(
             data-vscode-context='{"webviewSection":"ref"}'
             src="${webViewSrcs.ref}"
             alt="Placeholder"
-          />
+          >
         </div>
       </div>
       ${stdoutHtml}

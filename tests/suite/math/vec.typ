@@ -4,6 +4,10 @@
 #set math.vec(gap: 1em)
 $ vec(1, 2) $
 
+--- math-vec-align ---
+$ vec(-1, 1, -1, align: #left)
+  vec(-1, 1, -1, align: #center)
+  vec(-1, 1, -1, align: #right) $
 
 --- math-vec-align-explicit-alternating ---
 // Test alternating alignment in a vector.
@@ -45,3 +49,8 @@ $ vec(1, 2) $
 --- math-vec-delim-invalid-closing ---
 // Error: 22-33 invalid delimiter: "%"
 #set math.vec(delim: (none, "%"))
+
+--- math-vec-linebreaks ---
+// Currently linebreaks are equivalent to commas, though this behaviour may
+// change in the future.
+$ vec(a, b, c) vec(a \ b \ c) $

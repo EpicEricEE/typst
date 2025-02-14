@@ -4,16 +4,17 @@
 //! # Embedded fonts
 //! The following fonts are available as embedded fonts via the `embed-fonts`
 //! feature flag:
-//! - For text: Linux Libertine, New Computer Modern
+//! - For text: Libertinus Serif, New Computer Modern
 //! - For math: New Computer Modern Math
 //! - For code: Deja Vu Sans Mono
 
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use std::{fs, path::Path};
 
 use fontdb::{Database, Source};
-use typst::text::{Font, FontBook, FontInfo};
+use typst_library::foundations::Bytes;
+use typst_library::text::{Font, FontBook, FontInfo};
 use typst_timing::TimingScope;
 
 /// Holds details about the location of a font and lazily the font itself.
@@ -46,15 +47,14 @@ impl FontSlot {
     pub fn get(&self) -> Option<Font> {
         self.font
             .get_or_init(|| {
-                let _scope = TimingScope::new("load font", None);
+                let _scope = TimingScope::new("load font");
                 let data = fs::read(
                     self.path
                         .as_ref()
                         .expect("`path` is not `None` if `font` is uninitialized"),
                 )
-                .ok()?
-                .into();
-                Font::new(data, self.index)
+                .ok()?;
+                Font::new(Bytes::new(data), self.index)
             })
             .clone()
     }
@@ -161,7 +161,7 @@ impl FontSearcher {
             let path = match &face.source {
                 Source::File(path) | Source::SharedFile(path, _) => path,
                 // We never add binary sources to the database, so there
-                // shouln't be any.
+                // shouldn't be any.
                 Source::Binary(_) => continue,
             };
 
@@ -196,7 +196,7 @@ impl FontSearcher {
     #[cfg(feature = "embed-fonts")]
     fn add_embedded(&mut self) {
         for data in typst_assets::fonts() {
-            let buffer = typst::foundations::Bytes::from_static(data);
+            let buffer = Bytes::new(data);
             for (i, font) in Font::iter(buffer).enumerate() {
                 self.book.push(font.info().clone());
                 self.fonts.push(FontSlot {

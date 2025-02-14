@@ -66,13 +66,91 @@ Emoji: 🐪, 🌋, 🏞
 #set text(something: "invalid")
 
 --- text-unknown-font-family-warning ---
-#text(font: "linux libertine", "I exist, ")
-// Warning: 13-27 unknown font family: non-existing
-#text(font: "non-existing", "but")
-// Warning: 17-36 unknown font family: also-non-existing
-#set text(font: "also-non-existing")
+#text(font: "libertinus serif")[I exist,]
+// Warning: 13-26 unknown font family: nonexistent
+#text(font: "nonexistent")[but]
+// Warning: 17-35 unknown font family: also-nonexistent
+#set text(font: "also-nonexistent")
 I
-// Warning: 23-56 unknown font family: list-of
-// Warning: 23-56 unknown font family: non-existing-fonts
-#let var = text(font: ("list-of", "non-existing-fonts"))[don't]
+// Warning: 23-55 unknown font family: list-of
+// Warning: 23-55 unknown font family: nonexistent-fonts
+#let var = text(font: ("list-of", "nonexistent-fonts"))[don't]
 #var
+
+--- text-font-linux-libertine ---
+// Warning: 17-34 Typst's default font has changed from Linux Libertine to its successor Libertinus Serif
+// Hint: 17-34 please set the font to `"Libertinus Serif"` instead
+#set text(font: "Linux Libertine")
+
+--- issue-5499-text-fill-in-clip-block ---
+
+#let t = tiling(
+  size: (30pt, 30pt),
+  relative: "parent",
+  square(
+    size: 30pt,
+    fill: gradient
+      .conic(..color.map.rainbow),
+  )
+)
+
+#block(clip: false, height: 2em, {
+  text(fill: blue, "Hello")
+  [ ]
+  text(fill: blue.darken(20%).transparentize(50%), "Hello")
+  [ ]
+  text(fill: gradient.linear(..color.map.rainbow), "Hello")
+  [ ]
+  text(fill: t, "Hello")
+})
+#block(clip: true, height: 2em, {
+  text(fill: blue, "Hello")
+  [ ]
+  text(fill: blue.darken(20%).transparentize(50%), "Hello")
+  [ ]
+  text(fill: gradient.linear(..color.map.rainbow), "Hello")
+  [ ]
+  text(fill: t, "Hello")
+})
+
+--- text-font-types ---
+#let ubuntu = (name: "Ubuntu", covers: regex("[\u{20}-\u{FFFF}]"))
+#set text(font: ubuntu)
+#set text(font: (ubuntu, "Ubuntu"))
+
+--- text-font-covers-chinese ---
+// Without ranges, the quotation mark is using the Latin font.
+#set text(font: ("Ubuntu", "Noto Serif CJK SC"))
+分别设置“中文”和English字体
+
+// With ranges, the quotation mark is using the Chinese font.
+#set text(font: ((name: "Noto Serif CJK SC", covers: regex("[\u{00B7}-\u{3134F}]")), "Ubuntu"))
+分别设置“中文”和English字体
+
+// With "latin-in-cjk", the quotation mark is also using the Chinese font.
+#set text(font: ((name: "Ubuntu", covers: "latin-in-cjk"), "Noto Serif CJK SC"))
+分别设置“中文”和English字体
+
+--- text-font-covers-numbers ---
+// Change font only for numbers.
+#set text(font: (
+  (name: "PT Sans", covers: regex("[0-9]")),
+  "Libertinus Serif"
+))
+
+The number 123.
+
+--- text-font-covers-bad-1 ---
+// Error: 17-59 coverage regex may only use dot, letters, and character classes
+// Hint: 17-59 the regex is applied to each letter individually
+#set text(font: (name: "Ubuntu", covers: regex("20-FFFF")))
+
+--- text-font-covers-bad-2 ---
+// Error: 17-65 coverage regex may only use dot, letters, and character classes
+// Hint: 17-65 the regex is applied to each letter individually
+#set text(font: (name: "Ubuntu", covers: regex("\u{20}-\u{10}")))
+
+--- issue-5262-text-negative-size ---
+#set text(-1pt)
+
+a

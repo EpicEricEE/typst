@@ -30,7 +30,7 @@ A @netwok @arrgh @quark B. \
 A @netwok @arrgh @quark, B.
 
 #set text(0pt)
-#bibliography("/assets/bib/works.bib")
+#bibliography("/assets/bib/works.bib", style: "american-physics-society")
 
 --- cite-grouping-and-ordering ---
 @mcintosh_anxiety
@@ -47,7 +47,7 @@ A @netwok @arrgh @quark, B.
 @restful
 
 #show bibliography: none
-#bibliography("/assets/bib/works.bib")
+#bibliography("/assets/bib/works.bib", style: "american-physics-society")
 
 --- issue-785-cite-locate ---
 // Test citation in other introspection.
@@ -113,6 +113,28 @@ B #cite(<netwok>) #cite(<arrgh>).
 @mcintosh_anxiety
 #show bibliography: none
 #bibliography("/assets/bib/works.bib", style: "chicago-author-date")
+
+--- issue-5503-cite-in-align ---
+// The two aligned elements should be displayed in separate lines.
+#align(right)[@netwok]
+#align(right)[b]
+
+#show bibliography: none
+#bibliography("/assets/bib/works.bib")
+
+--- issue-5503-cite-group-interrupted-by-par-align ---
+// `par` and `align` are block-level and should interrupt a cite group
+@netwok
+@arrgh
+#par(leading: 5em)[@netwok]
+#par[@arrgh]
+@netwok
+@arrgh
+#align(right)[@netwok]
+@arrgh
+
+#show bibliography: none
+#bibliography("/assets/bib/works.bib")
 
 --- cite-type-error-hint ---
 // Test hint for cast error from str to label

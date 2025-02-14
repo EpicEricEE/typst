@@ -7,8 +7,7 @@ forms a "block" with flush edges at both sides.
 
 First line indents and hyphenation play nicely with justified text.
 
---- justify-knuth-story ---
-// LARGE
+--- justify-knuth-story large ---
 #set page(width: auto, height: auto)
 #set par(leading: 4pt, justify: true)
 #set text(font: "New Computer Modern")
@@ -109,7 +108,7 @@ int main() {
 // Japanese typography is more complex, make sure it is at least a bit sensible.
 #set page(width: auto)
 #set par(justify: true)
-#set text(lang: "ja", font: ("Linux Libertine", "Noto Serif CJK JP"))
+#set text(lang: "ja", font: ("Libertinus Serif", "Noto Serif CJK JP"))
 #rect(inset: 0pt, width: 80pt, fill: rgb("eee"))[
   ウィキペディア（英: Wikipedia）は、世界中のボランティアの共同作業によって執筆及び作成されるフリーの多言語インターネット百科事典である。主に寄付に依って活動している非営利団体「ウィキメディア財団」が所有・運営している。
 
@@ -172,3 +171,8 @@ int main() {
 // Test that overflow does not lead to bad bounds in paragraph optimization.
 #set par(justify: true)
 #block(width: 0pt)[A B]
+
+--- issue-5360-unnecessary-hyphenation ---
+// Test whether `Formal` would be in one line.
+#set par(justify: true)
+#table(columns: 1, [Formal])

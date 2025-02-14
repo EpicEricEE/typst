@@ -3,38 +3,36 @@ use std::sync::Arc;
 use pixglyph::Bitmap;
 use tiny_skia as sk;
 use ttf_parser::{GlyphId, OutlineBuilder};
-use typst::layout::{Abs, Axes, Point, Size};
-use typst::text::color::{frame_for_glyph, is_color_glyph};
-use typst::text::{Font, TextItem};
-use typst::visualize::{FixedStroke, Paint};
+use typst_library::layout::{Abs, Axes, Point, Size};
+use typst_library::text::color::{glyph_frame, should_outline};
+use typst_library::text::{Font, TextItem};
+use typst_library::visualize::{FixedStroke, Paint};
 
-use crate::paint::{self, GradientSampler, PaintSampler, PatternSampler};
+use crate::paint::{self, GradientSampler, PaintSampler, TilingSampler};
 use crate::{shape, AbsExt, State};
 
 /// Render a text run into the canvas.
 pub fn render_text(canvas: &mut sk::Pixmap, state: State, text: &TextItem) {
-    let mut x = 0.0;
+    let mut x = Abs::zero();
     for glyph in &text.glyphs {
         let id = GlyphId(glyph.id);
-        let offset = x + glyph.x_offset.at(text.size).to_f32();
+        let offset = x + glyph.x_offset.at(text.size);
 
-        if is_color_glyph(&text.font, glyph) {
+        if should_outline(&text.font, glyph) {
+            let state = state.pre_translate(Point::with_x(offset));
+            render_outline_glyph(canvas, state, text, id);
+        } else {
             let upem = text.font.units_per_em();
-            let text_scale = Abs::raw(text.size.to_raw() / upem);
+            let text_scale = text.size / upem;
             let state = state
-                .pre_translate(Point::new(Abs::raw(offset as _), -text.size))
+                .pre_translate(Point::new(offset, -text.size))
                 .pre_scale(Axes::new(text_scale, text_scale));
 
-            let glyph_frame = frame_for_glyph(&text.font, glyph.id);
-
+            let (glyph_frame, _) = glyph_frame(&text.font, glyph.id);
             crate::render_frame(canvas, state, &glyph_frame);
-        } else {
-            let state =
-                state.pre_translate(Point::new(Abs::raw(offset as _), Abs::raw(0.0)));
-            render_outline_glyph(canvas, state, text, id);
         }
 
-        x += glyph.x_advance.at(text.size).to_f32();
+        x += glyph.x_advance.at(text.size);
     }
 }
 
@@ -147,9 +145,9 @@ fn render_outline_glyph(
                 paint::to_sk_color_u8(*color).premultiply(),
             )?;
         }
-        Paint::Pattern(pattern) => {
-            let pixmap = paint::render_pattern_frame(&state, pattern);
-            let sampler = PatternSampler::new(pattern, &pixmap, &state, true);
+        Paint::Tiling(tiling) => {
+            let pixmap = paint::render_tiling_frame(&state, tiling);
+            let sampler = TilingSampler::new(tiling, &pixmap, &state, true);
             write_bitmap(canvas, &bitmap, &state, sampler)?;
         }
     }
@@ -166,29 +164,41 @@ fn write_bitmap<S: PaintSampler>(
     // If we have a clip mask we first render to a pixmap that we then blend
     // with our canvas
     if state.mask.is_some() {
+        let cw = canvas.width() as i32;
+        let ch = canvas.height() as i32;
         let mw = bitmap.width;
         let mh = bitmap.height;
+
+        let left = bitmap.left;
+        let top = bitmap.top;
 
         // Pad the pixmap with 1 pixel in each dimension so that we do
         // not get any problem with floating point errors along their border
         let mut pixmap = sk::Pixmap::new(mw + 2, mh + 2)?;
+        let pixels = bytemuck::cast_slice_mut::<u8, u32>(pixmap.data_mut());
         for x in 0..mw {
             for y in 0..mh {
                 let alpha = bitmap.coverage[(y * mw + x) as usize];
-                let color = sampler.sample((x, y));
-                pixmap.pixels_mut()[((y + 1) * (mw + 2) + (x + 1)) as usize] =
-                    sk::ColorU8::from_rgba(
-                        color.red(),
-                        color.green(),
-                        color.blue(),
-                        alpha,
-                    )
-                    .premultiply();
+
+                // To sample at the correct position, we need to convert each
+                // pixel's position in the bitmap (x and y) to its final
+                // expected position in the canvas. Due to padding, this
+                // pixel's position in the pixmap will be (x + 1, y + 1).
+                // Then, when drawing the pixmap to the canvas, we place its
+                // top-left corner at position (left - 1, top - 1). Therefore,
+                // the final position of this pixel in the canvas is given by
+                // (left - 1 + x + 1, top - 1 + y + 1) = (left + x, top + y).
+                let sample_pos = (
+                    (left + x as i32).clamp(0, cw) as u32,
+                    (top + y as i32).clamp(0, ch) as u32,
+                );
+                let color = sampler.sample(sample_pos);
+                let color = bytemuck::cast(color);
+
+                let applied = alpha_mul(color, alpha as u32);
+                pixels[((y + 1) * (mw + 2) + (x + 1)) as usize] = applied;
             }
         }
-
-        let left = bitmap.left;
-        let top = bitmap.top;
 
         canvas.draw_pixmap(
             left - 1,

@@ -38,7 +38,7 @@ in your template.
   number-align: center,
 )
 
-#rect(fill: aqua)
+#rect(fill: aqua.lighten(40%))
 ```
 
 This example visualizes the dimensions for page content, headers, and footers.
@@ -188,7 +188,7 @@ conditionally remove the header on the first page:
 This example may look intimidating, but let's break it down: By using the
 `{context}` keyword, we are telling Typst that the header depends on where we
 are in the document. We then ask Typst if the page [counter] is larger than one
-at our (context-dependant) current position. The page counter starts at one, so
+at our (context-dependent) current position. The page counter starts at one, so
 we are skipping the header on a single page. Counters may have multiple levels.
 This feature is used for items like headings, but the page counter will always
 have a single level, so we can just look at the first one.
@@ -432,8 +432,8 @@ frequently used for [figures]($figure.placement).
 
 ### Use columns anywhere in your document { #columns-anywhere }
 To create columns within a nested layout, e.g. within a rectangle, you can use
-the [`columns` function]($columns) directly. However, it should really only be
-used within nested layouts. At the page-level, the page set rule is preferrable
+the [`columns` function]($columns) directly. However, it really should only be
+used within nested layouts. At the page-level, the page set rule is preferable
 because it has better interactions with things like page-level floats,
 footnotes, and line numbers.
 

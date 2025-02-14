@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use typed_arena::Arena;
 use typst::diag::{FileError, FileResult, StrResult};
 use typst::foundations::{Bytes, Datetime};
-use typst::layout::{Abs, Point, Size};
+use typst::layout::{Abs, PagedDocument, Point, Size};
 use typst::syntax::{FileId, Source, VirtualPath};
 use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
@@ -26,9 +26,11 @@ pub struct Html {
     #[serde(skip)]
     md: String,
     #[serde(skip)]
-    description: Option<EcoString>,
-    #[serde(skip)]
     outline: Vec<OutlineItem>,
+    #[serde(skip)]
+    title: Option<EcoString>,
+    #[serde(skip)]
+    description: Option<EcoString>,
 }
 
 impl Html {
@@ -37,8 +39,9 @@ impl Html {
         Self {
             md: String::new(),
             raw,
-            description: None,
             outline: vec![],
+            title: None,
+            description: None,
         }
     }
 
@@ -47,10 +50,12 @@ impl Html {
     pub fn markdown(resolver: &dyn Resolver, md: &str, nesting: Option<usize>) -> Self {
         let mut text = md;
         let mut description = None;
+        let mut title = None;
         let document = YamlFrontMatter::parse::<Metadata>(md);
         if let Ok(document) = &document {
             text = &document.content;
-            description = Some(document.metadata.description.clone())
+            title = document.metadata.title.clone();
+            description = document.metadata.description.clone();
         }
 
         let options = md::Options::ENABLE_TABLES
@@ -97,8 +102,9 @@ impl Html {
         Html {
             md: text.into(),
             raw,
-            description,
             outline: handler.outline,
+            title,
+            description,
         }
     }
 
@@ -112,21 +118,23 @@ impl Html {
         &self.md
     }
 
+    /// The outline of the HTML.
+    pub fn outline(&self) -> Vec<OutlineItem> {
+        self.outline.clone()
+    }
+
     /// The title of the HTML.
     ///
     /// Returns `None` if the HTML doesn't start with an `h1` tag.
     pub fn title(&self) -> Option<&str> {
-        let mut s = Scanner::new(&self.raw);
-        s.eat_if("<h1").then(|| {
-            s.eat_until('>');
-            s.eat_if('>');
-            s.eat_until("</h1>")
+        self.title.as_deref().or_else(|| {
+            let mut s = Scanner::new(&self.raw);
+            s.eat_if("<h1").then(|| {
+                s.eat_until('>');
+                s.eat_if('>');
+                s.eat_until("</h1>")
+            })
         })
-    }
-
-    /// The outline of the HTML.
-    pub fn outline(&self) -> Vec<OutlineItem> {
-        self.outline.clone()
     }
 
     /// The description from the front matter.
@@ -144,7 +152,8 @@ impl Debug for Html {
 /// Front matter metadata.
 #[derive(Deserialize)]
 struct Metadata {
-    description: EcoString,
+    title: Option<EcoString>,
+    description: Option<EcoString>,
 }
 
 struct Handler<'a> {
@@ -292,7 +301,10 @@ impl<'a> Handler<'a> {
             return;
         }
 
-        let default = self.peeked.as_ref().map(|text| text.to_kebab_case());
+        let body = self.peeked.as_ref();
+        let default = body.map(|text| text.to_kebab_case());
+        let has_id = id_slot.is_some();
+
         let id: &'a str = match (&id_slot, default) {
             (Some(id), default) => {
                 if Some(*id) == default.as_deref() {
@@ -307,10 +319,10 @@ impl<'a> Handler<'a> {
         *id_slot = (!id.is_empty()).then_some(id);
 
         // Special case for things like "v0.3.0".
-        let name = if id.starts_with('v') && id.contains('.') {
-            id.into()
-        } else {
-            id.to_title_case().into()
+        let name = match &body {
+            _ if id.starts_with('v') && id.contains('.') => id.into(),
+            Some(body) if !has_id => body.as_ref().into(),
+            _ => id.to_title_case().into(),
         };
 
         let mut children = &mut self.outline;
@@ -410,7 +422,7 @@ fn code_block(resolver: &dyn Resolver, lang: &str, text: &str) -> Html {
     let source = Source::new(id, compile);
     let world = DocWorld(source);
 
-    let mut document = match typst::compile(&world).output {
+    let mut document = match typst::compile::<PagedDocument>(&world).output {
         Ok(doc) => doc,
         Err(err) => {
             let msg = &err[0].message;
@@ -427,7 +439,7 @@ fn code_block(resolver: &dyn Resolver, lang: &str, text: &str) -> Html {
         document.pages.truncate(1);
     }
 
-    let hash = typst::utils::hash128(text);
+    let hash = typst::utils::hash128(&(lang, text));
     resolver.example(hash, highlighted, &document)
 }
 
@@ -477,7 +489,7 @@ impl World for DocWorld {
 
     fn file(&self, id: FileId) -> FileResult<Bytes> {
         assert!(id.package().is_none());
-        Ok(Bytes::from_static(
+        Ok(Bytes::new(
             typst_dev_assets::get_by_name(
                 &id.vpath().as_rootless_path().to_string_lossy(),
             )

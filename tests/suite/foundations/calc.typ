@@ -4,18 +4,23 @@
 #test(type(calc.round(3.1415, digits: 2)), float)
 #test(type(calc.round(5, digits: 2)), int)
 #test(type(calc.round(decimal("3.1415"), digits: 2)), decimal)
+#test(type(calc.round(314.15, digits: -2)), float)
+#test(type(calc.round(523, digits: -2)), int)
+#test(type(calc.round(decimal("314.15"), digits: -2)), decimal)
 
 --- calc-round-large-inputs ---
 #test(calc.round(31114, digits: 4000000000), 31114)
 #test(calc.round(9223372036854775807, digits: 12), 9223372036854775807)
+#test(calc.round(9223372036854775807, digits: -20), 0)
 #test(calc.round(238959235.129590203, digits: 4000000000), 238959235.129590203)
 #test(calc.round(1.7976931348623157e+308, digits: 12), 1.7976931348623157e+308)
+#test(calc.round(1.7976931348623157e+308, digits: -308), float.inf)
+#test(calc.round(-1.7976931348623157e+308, digits: -308), -float.inf)
+#test(calc.round(12.34, digits: -312), 0.0)
 #test(calc.round(decimal("238959235.129590203"), digits: 4000000000), decimal("238959235.129590203"))
 #test(calc.round(decimal("79228162514264337593543950335"), digits: 12), decimal("79228162514264337593543950335"))
-
---- calc-round-negative-digits ---
-// Error: 29-31 number must be at least zero
-#calc.round(243.32, digits: -2)
+#test(calc.round(decimal("79228162514264337593543950335"), digits: -50), decimal("0"))
+#test(calc.round(decimal("-79228162514264337593543950335"), digits: -2), decimal("-79228162514264337593543950300"))
 
 --- calc-abs ---
 // Test the `abs` function.
@@ -122,10 +127,10 @@
 #test(calc.quo(1, 1), 1)
 #test(calc.quo(5, 3), 1)
 #test(calc.quo(5, -3), -1)
-#test(calc.quo(22.5, 10), 2.0)
-#test(calc.quo(9, 4.5), 2.0)
-#test(calc.quo(decimal("22.5"), 10), decimal("2"))
-#test(calc.quo(decimal("9"), decimal("4.5")), decimal("2"))
+#test(calc.quo(22.5, 10), 2)
+#test(calc.quo(9, 4.5), 2)
+#test(calc.quo(decimal("22.5"), 10), 2)
+#test(calc.quo(decimal("9"), decimal("4.5")), 2)
 
 --- calc-quo-divisor-zero-1 ---
 // Error: 14-15 divisor must not be zero
@@ -307,29 +312,45 @@
 // Error: 2-41 the result is too large
 #calc.lcm(15486487489457, 4874879896543)
 
---- calc-rounding-larger-than-max-int ---
+--- calc-round-larger-than-max-int ---
 #test(calc.round(decimal("9223372036854775809.5")), decimal("9223372036854775810"))
 #test(calc.round(9223372036854775809.5), 9223372036854775810.0)
-#test(calc.floor(decimal("9223372036854775809.5")), decimal("9223372036854775809"))
-#test(calc.floor(9223372036854775809.5), 9223372036854775809.0)
-#test(calc.ceil(decimal("9223372036854775809.5")), decimal("9223372036854775810"))
-#test(calc.ceil(9223372036854775809.5), 9223372036854775810.0)
-#test(calc.trunc(decimal("9223372036854775809.5")), decimal("9223372036854775809"))
-#test(calc.trunc(9223372036854775809.5), 9223372036854775809.0)
-#test(calc.quo(decimal("9223372036854775809.5"), 1), decimal("9223372036854775809"))
-#test(calc.quo(9223372036854775809.5, 1), 9223372036854775809.0)
 
---- calc-rounding-smaller-than-min-int ---
+--- calc-floor-float-larger-than-max-int ---
+// Error: 2-35 the result is too large
+#calc.floor(9223372036854775809.5)
+
+--- calc-floor-decimal-larger-than-max-int ---
+// Error: 2-46 the result is too large
+#calc.floor(decimal("9223372036854775809.5"))
+
+--- calc-round-smaller-than-min-int ---
 #test(calc.round(decimal("-9223372036854775809.5")), decimal("-9223372036854775810"))
 #test(calc.round(-9223372036854775809.5), -9223372036854775810.0)
-#test(calc.floor(decimal("-9223372036854775809.5")), decimal("-9223372036854775810"))
-#test(calc.floor(-9223372036854775809.5), -9223372036854775810.0)
-#test(calc.ceil(decimal("-9223372036854775809.5")), decimal("-9223372036854775809"))
-#test(calc.ceil(-9223372036854775809.5), -9223372036854775809.0)
-#test(calc.trunc(decimal("-9223372036854775809.5")), decimal("-9223372036854775809"))
-#test(calc.trunc(-9223372036854775809.5), -9223372036854775809.0)
-#test(calc.quo(decimal("-9223372036854775809.5"), 1), decimal("-9223372036854775810"))
-#test(calc.quo(-9223372036854775809.5, 1), -9223372036854775810.0)
+
+--- calc-floor-float-smaller-than-min-int ---
+// Error: 2-36 the result is too large
+#calc.floor(-9223372036854775809.5)
+
+--- calc-floor-decimal-smaller-than-min-int ---
+// Error: 2-47 the result is too large
+#calc.floor(decimal("-9223372036854775809.5"))
+
+--- calc-round-int-too-large ---
+// Error: 2-45 the result is too large
+#calc.round(9223372036854775807, digits: -1)
+
+--- calc-round-int-negative-too-large ---
+// Error: 2-46 the result is too large
+#calc.round(-9223372036854775807, digits: -1)
+
+--- calc-round-decimal-too-large ---
+// Error: 2-66 the result is too large
+#calc.round(decimal("79228162514264337593543950335"), digits: -1)
+
+--- calc-round-decimal-negative-too-large ---
+// Error: 2-67 the result is too large
+#calc.round(decimal("-79228162514264337593543950335"), digits: -1)
 
 --- calc-min-nothing ---
 // Error: 2-12 expected at least one value
@@ -347,3 +368,19 @@
 // Error: 2-37 cannot apply this operation to a decimal and a float
 // Hint: 2-37 if loss of precision is acceptable, explicitly cast the decimal to a float with `float(value)`
 #calc.clamp(decimal("10"), 5.5, 6.6)
+
+--- calc-norm ---
+#test(calc.norm(1, 2, -3, 0.5), calc.sqrt(14.25))
+#test(calc.norm(3, 4), 5.0)
+#test(calc.norm(3, 4), 5.0)
+#test(calc.norm(), 0.0)
+#test(calc.norm(p: 3, 1, -2), calc.pow(9, 1/3))
+#test(calc.norm(p: calc.inf, 1, -2), 2.0)
+
+--- calc-norm-negative-p ---
+// Error: 15-17 p must be greater than zero
+#calc.norm(p: -1, 1)
+
+--- calc-norm-expected-float ---
+// Error: 12-15 expected float, found ratio
+#calc.norm(10%)

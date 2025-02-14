@@ -1,36 +1,36 @@
 use std::num::NonZeroUsize;
 
-use ecow::EcoString;
-use typst::layout::{Frame, FrameItem, Point, Position, Size};
-use typst::model::{Destination, Document};
+use typst::layout::{Frame, FrameItem, PagedDocument, Point, Position, Size};
+use typst::model::{Destination, Url};
 use typst::syntax::{FileId, LinkedNode, Side, Source, Span, SyntaxKind};
 use typst::visualize::Geometry;
-use typst::World;
+use typst::WorldExt;
+
+use crate::IdeWorld;
 
 /// Where to [jump](jump_from_click) to.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Jump {
-    /// Jump to a position in a source file.
-    Source(FileId, usize),
+    /// Jump to a position in a file.
+    File(FileId, usize),
     /// Jump to an external URL.
-    Url(EcoString),
+    Url(Url),
     /// Jump to a point on a page.
     Position(Position),
 }
 
 impl Jump {
-    fn from_span(world: &dyn World, span: Span) -> Option<Self> {
+    fn from_span(world: &dyn IdeWorld, span: Span) -> Option<Self> {
         let id = span.id()?;
-        let source = world.source(id).ok()?;
-        let node = source.find(span)?;
-        Some(Self::Source(id, node.offset()))
+        let offset = world.range(span)?.start;
+        Some(Self::File(id, offset))
     }
 }
 
 /// Determine where to jump to based on a click in a frame.
 pub fn jump_from_click(
-    world: &dyn World,
-    document: &Document,
+    world: &dyn IdeWorld,
+    document: &PagedDocument,
     frame: &Frame,
     click: Point,
 ) -> Option<Jump> {
@@ -73,7 +73,10 @@ pub fn jump_from_click(
                         let Some(id) = span.id() else { continue };
                         let source = world.source(id).ok()?;
                         let node = source.find(span)?;
-                        let pos = if node.kind() == SyntaxKind::Text {
+                        let pos = if matches!(
+                            node.kind(),
+                            SyntaxKind::Text | SyntaxKind::MathText
+                        ) {
                             let range = node.range();
                             let mut offset = range.start + usize::from(span_offset);
                             if (click.x - pos.x) > width / 2.0 {
@@ -83,7 +86,7 @@ pub fn jump_from_click(
                         } else {
                             node.offset()
                         };
-                        return Some(Jump::Source(source.id(), pos));
+                        return Some(Jump::File(source.id(), pos));
                     }
 
                     pos.x += width;
@@ -110,12 +113,12 @@ pub fn jump_from_click(
 
 /// Find the output location in the document for a cursor position.
 pub fn jump_from_cursor(
-    document: &Document,
+    document: &PagedDocument,
     source: &Source,
     cursor: usize,
 ) -> Vec<Position> {
     fn is_text(node: &LinkedNode) -> bool {
-        node.get().kind() == SyntaxKind::Text
+        matches!(node.kind(), SyntaxKind::Text | SyntaxKind::MathText)
     }
 
     let root = LinkedNode::new(source.root());
@@ -182,19 +185,20 @@ mod tests {
     //! ))
     //! ```
 
+    use std::borrow::Borrow;
     use std::num::NonZeroUsize;
 
     use typst::layout::{Abs, Point, Position};
 
     use super::{jump_from_click, jump_from_cursor, Jump};
-    use crate::tests::TestWorld;
+    use crate::tests::{FilePos, TestWorld, WorldLike};
 
     fn point(x: f64, y: f64) -> Point {
         Point::new(Abs::pt(x), Abs::pt(y))
     }
 
     fn cursor(cursor: usize) -> Option<Jump> {
-        Some(Jump::Source(TestWorld::main_id(), cursor))
+        Some(Jump::File(TestWorld::main_id(), cursor))
     }
 
     fn pos(page: usize, x: f64, y: f64) -> Option<Position> {
@@ -206,15 +210,16 @@ mod tests {
 
     macro_rules! assert_approx_eq {
         ($l:expr, $r:expr) => {
-            assert!(($l.to_raw() - $r.to_raw()).abs() < 0.1, "{:?} ≉ {:?}", $l, $r);
+            assert!(($l - $r).abs() < Abs::pt(0.1), "{:?} ≉ {:?}", $l, $r);
         };
     }
 
     #[track_caller]
-    fn test_click(text: &str, click: Point, expected: Option<Jump>) {
-        let world = TestWorld::new(text);
-        let doc = typst::compile(&world).output.unwrap();
-        let jump = jump_from_click(&world, &doc, &doc.pages[0].frame, click);
+    fn test_click(world: impl WorldLike, click: Point, expected: Option<Jump>) {
+        let world = world.acquire();
+        let world = world.borrow();
+        let doc = typst::compile(world).output.unwrap();
+        let jump = jump_from_click(world, &doc, &doc.pages[0].frame, click);
         if let (Some(Jump::Position(pos)), Some(Jump::Position(expected))) =
             (&jump, &expected)
         {
@@ -227,10 +232,12 @@ mod tests {
     }
 
     #[track_caller]
-    fn test_cursor(text: &str, cursor: usize, expected: Option<Position>) {
-        let world = TestWorld::new(text);
-        let doc = typst::compile(&world).output.unwrap();
-        let pos = jump_from_cursor(&doc, &world.main, cursor);
+    fn test_cursor(world: impl WorldLike, pos: impl FilePos, expected: Option<Position>) {
+        let world = world.acquire();
+        let world = world.borrow();
+        let doc = typst::compile(world).output.unwrap();
+        let (source, cursor) = pos.resolve(world);
+        let pos = jump_from_cursor(&doc, &source, cursor);
         assert_eq!(!pos.is_empty(), expected.is_some());
         if let (Some(pos), Some(expected)) = (pos.first(), expected) {
             assert_eq!(pos.page, expected.page);
@@ -258,10 +265,20 @@ mod tests {
     }
 
     #[test]
+    fn test_jump_from_click_math() {
+        test_click("$a + b$", point(28.0, 14.0), cursor(5));
+    }
+
+    #[test]
     fn test_jump_from_cursor() {
         let s = "*Hello* #box[ABC] World";
         test_cursor(s, 12, None);
         test_cursor(s, 14, pos(1, 37.55, 16.58));
+    }
+
+    #[test]
+    fn test_jump_from_cursor_math() {
+        test_cursor("$a + b$", -3, pos(1, 27.51, 16.83));
     }
 
     #[test]

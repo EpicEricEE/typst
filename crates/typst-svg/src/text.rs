@@ -3,10 +3,13 @@ use std::io::Read;
 use base64::Engine;
 use ecow::EcoString;
 use ttf_parser::GlyphId;
-use typst::layout::{Abs, Point, Ratio, Size, Transform};
-use typst::text::{Font, TextItem};
-use typst::utils::hash128;
-use typst::visualize::{FillRule, Image, Paint, RasterFormat, RelativeTo};
+use typst_library::foundations::Bytes;
+use typst_library::layout::{Abs, Point, Ratio, Size, Transform};
+use typst_library::text::{Font, TextItem};
+use typst_library::visualize::{
+    ExchangeFormat, FillRule, Image, Paint, RasterImage, RelativeTo,
+};
+use typst_utils::hash128;
 
 use crate::{SVGRenderer, State, SvgMatrix, SvgPathBuilder};
 
@@ -55,15 +58,15 @@ impl SVGRenderer {
         scale: f64,
     ) -> Option<()> {
         let data_url = convert_svg_glyph_to_base64_url(&text.font, id)?;
-        let upem = Abs::raw(text.font.units_per_em());
-        let origin_ascender = text.font.metrics().ascender.at(upem).to_pt();
+        let upem = text.font.units_per_em();
+        let origin_ascender = text.font.metrics().ascender.at(Abs::pt(upem));
 
         let glyph_hash = hash128(&(&text.font, id));
         let id = self.glyphs.insert_with(glyph_hash, || RenderedGlyph::Image {
             url: data_url,
-            width: upem.to_pt(),
-            height: upem.to_pt(),
-            ts: Transform::translate(Abs::zero(), Abs::pt(-origin_ascender))
+            width: upem,
+            height: upem,
+            ts: Transform::translate(Abs::zero(), -origin_ascender)
                 .post_concat(Transform::scale(Ratio::new(scale), Ratio::new(-scale))),
         });
 
@@ -165,7 +168,7 @@ impl SVGRenderer {
                 )
                 .post_concat(state.transform.invert().unwrap()),
             },
-            Paint::Pattern(pattern) => match pattern.unwrap_relative(true) {
+            Paint::Tiling(tiling) => match tiling.unwrap_relative(true) {
                 RelativeTo::Self_ => Transform::identity(),
                 RelativeTo::Parent => state.transform.invert().unwrap(),
             },
@@ -243,7 +246,9 @@ fn convert_bitmap_glyph_to_image(font: &Font, id: GlyphId) -> Option<(Image, f64
     if raster.format != ttf_parser::RasterImageFormat::PNG {
         return None;
     }
-    let image = Image::new(raster.data.into(), RasterFormat::Png.into(), None).ok()?;
+    let image = Image::plain(
+        RasterImage::plain(Bytes::new(raster.data.to_vec()), ExchangeFormat::Png).ok()?,
+    );
     Some((image, raster.x as f64, raster.y as f64))
 }
 
@@ -260,9 +265,10 @@ fn convert_svg_glyph_to_base64_url(font: &Font, id: GlyphId) -> Option<EcoString
         data = &decoded;
     }
 
-    let upem = Abs::raw(font.units_per_em());
-    let (width, height) = (upem.to_pt(), upem.to_pt());
-    let origin_ascender = font.metrics().ascender.at(upem).to_pt();
+    let upem = font.units_per_em();
+    let width = upem;
+    let height = upem;
+    let origin_ascender = font.metrics().ascender.at(Abs::pt(upem));
 
     // Parse XML.
     let mut svg_str = std::str::from_utf8(data).ok()?.to_owned();
@@ -296,7 +302,8 @@ fn convert_svg_glyph_to_base64_url(font: &Font, id: GlyphId) -> Option<EcoString
         // make sure the glyph is rendered at the correct position
         svg_str.insert_str(
             start_span.unwrap().range().end,
-            format!(r#" viewBox="0 {} {width} {height}""#, -origin_ascender).as_str(),
+            format!(r#" viewBox="0 {} {width} {height}""#, -origin_ascender.to_pt())
+                .as_str(),
         );
     }
 

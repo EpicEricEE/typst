@@ -1,8 +1,8 @@
 use crate::diag::{SourceResult, bail};
 use crate::engine::Engine;
 use crate::foundations::{
-    Args, AutoValue, Construct, Content, NativeElement, Packed, Smart, StyleChain, Value,
-    cast, elem,
+    Args, AutoValue, Cast, Construct, Content, NativeElement, NoneValue, Packed, Smart, StyleChain,
+    Value, cast, elem,
 };
 use crate::introspection::Locator;
 use crate::layout::{
@@ -344,23 +344,30 @@ pub struct BlockElem {
     #[default(false)]
     pub clip: bool,
 
-    /// Whether this block must stick to the following one, with no break in
-    /// between.
+    /// If and how this block must stick to the blocks surrounding it, with no
+    /// break in between.
     ///
-    /// This is, by default, set on heading blocks to prevent orphaned headings
-    /// at the bottom of the page.
+    /// This is, by default, set to "below" on heading blocks to prevent
+    /// orphaned headings at the bottom of the page.
     ///
     /// ```example
     /// >>> #set page(height: 140pt)
     /// // Disable stickiness of headings.
-    /// #show heading: set block(sticky: false)
+    /// #show heading: set block(sticky: none)
     /// #lorem(20)
     ///
     /// = Chapter
     /// #lorem(10)
+    ///
+    /// #table(
+    /// columns: 2,
+    /// [A], [B],
+    /// [C], [D],
+    /// )
+    /// #block(sticky: "above")[The above table shows that...]
     /// ```
-    #[default(false)]
-    pub sticky: bool,
+    #[default(Sticky::Directional(None))]
+    pub sticky: Sticky,
 
     /// The contents of the block.
     #[positional]
@@ -432,6 +439,48 @@ cast! {
         _ => Value::Auto,
     },
     v: Content => Self::Content(v),
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum Sticky {
+    Directional(Option<StickDir>),
+    Bool(bool),
+}
+
+impl Sticky {
+    /// Whether this block sticks to the above content.
+    pub fn above(self) -> bool {
+        matches!(self, Self::Directional(Some(StickDir::Above | StickDir::Both)))
+    }
+
+    /// Whether this block sticks to the below content.
+    pub fn below(self) -> bool {
+        matches!(
+            self,
+            Self::Directional(Some(StickDir::Below | StickDir::Both)) | Self::Bool(true)
+        )
+    }
+}
+
+cast! {
+    Sticky,
+    self => match self {
+        Self::Directional(dir) => dir.into_value(),
+        Self::Bool(v) => v.into_value(),
+    },
+    v: bool => Self::Bool(v),
+    v: StickDir => Self::Directional(Some(v)),
+    _: NoneValue => Self::Directional(None),
+}
+
+#[derive(Debug, Cast, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum StickDir {
+    /// Makes the below content stick to this block.
+    Below,
+    /// Makes this block stick to the above content.
+    Above,
+    /// Makes this block stick to both the above and below content.
+    Both,
 }
 
 /// Defines how to size something along an axis.

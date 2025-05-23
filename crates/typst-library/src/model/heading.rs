@@ -9,7 +9,7 @@ use crate::foundations::{
     Content, NativeElement, Packed, ShowSet, Smart, StyleChain, Styles, Synthesize, elem,
 };
 use crate::introspection::{Count, Counter, CounterUpdate, Locatable};
-use crate::layout::{BlockElem, Em, Length};
+use crate::layout::{BlockElem, Em, Length, StickDir, Sticky};
 use crate::model::{Numbering, Outlinable, Refable, Supplement};
 use crate::text::{FontWeight, LocalName, TextElem, TextSize};
 
@@ -255,7 +255,7 @@ impl ShowSet for Packed<HeadingElem> {
         out.set(TextElem::weight, FontWeight::BOLD);
         out.set(BlockElem::above, Smart::Custom(above.into()));
         out.set(BlockElem::below, Smart::Custom(below.into()));
-        out.set(BlockElem::sticky, true);
+        out.set(BlockElem::sticky, Sticky::Directional(Some(StickDir::Below)));
         out
     }
 }

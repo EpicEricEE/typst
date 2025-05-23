@@ -1,7 +1,7 @@
 use crate::diag::{Hint, HintedStrResult};
 use crate::foundations::{Content, Packed, ShowSet, Smart, StyleChain, Styles, elem};
 use crate::introspection::Locatable;
-use crate::layout::{BlockElem, Em};
+use crate::layout::{BlockElem, Em, StickDir, Sticky};
 use crate::model::DocumentElem;
 use crate::text::{FontWeight, TextElem, TextSize};
 
@@ -71,7 +71,7 @@ impl ShowSet for Packed<TitleElem> {
         out.set(TextElem::weight, FontWeight::BOLD);
         out.set(BlockElem::above, Smart::Custom(ABOVE.into()));
         out.set(BlockElem::below, Smart::Custom(BELOW.into()));
-        out.set(BlockElem::sticky, true);
+        out.set(BlockElem::sticky, Sticky::Directional(Some(StickDir::Below)));
         out
     }
 }

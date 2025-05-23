@@ -48,6 +48,7 @@ pub fn collect<'a>(
         expand,
         output: Vec::with_capacity(children.len()),
         par_situation: ParSituation::First,
+        stickable: None,
     }
     .run(mode)
 }
@@ -62,6 +63,7 @@ struct Collector<'a, 'x, 'y> {
     locator: SplitLocator<'a>,
     output: Vec<Child<'a>>,
     par_situation: ParSituation,
+    stickable: Option<usize>,
 }
 
 impl<'a> Collector<'a, '_, '_> {
@@ -224,8 +226,14 @@ impl<'a> Collector<'a, '_, '_> {
                 frame.height()
             };
 
-            self.output
-                .push(Child::Line(self.boxed(LineChild { frame, align, need })));
+            self.output.push(Child::Line(self.boxed(LineChild {
+                frame,
+                align,
+                need,
+                sticky: false,
+            })));
+
+            self.stickable = Some(self.output.len() - 1);
         }
     }
 
@@ -251,10 +259,22 @@ impl<'a> Collector<'a, '_, '_> {
 
         self.output.push(spacing(elem.above.get(styles)));
 
+        if sticky.above() {
+            // If there is a previous child that can be made sticky, do so.
+            if let Some(stickable) = self.stickable.and_then(|i| self.output.get_mut(i)) {
+                match stickable {
+                    Child::Line(line) => line.sticky = true,
+                    Child::Single(single) => single.sticky = true,
+                    Child::Multi(multi) => multi.sticky = true,
+                    _ => unreachable!(),
+                }
+            }
+        }
+
         if !breakable || fr.is_some() {
             self.output.push(Child::Single(self.boxed(SingleChild {
                 align,
-                sticky,
+                sticky: sticky.below(),
                 alone,
                 fr,
                 elem,
@@ -265,7 +285,7 @@ impl<'a> Collector<'a, '_, '_> {
         } else {
             self.output.push(Child::Multi(self.boxed(MultiChild {
                 align,
-                sticky,
+                sticky: sticky.below(),
                 alone,
                 elem,
                 styles,
@@ -274,6 +294,7 @@ impl<'a> Collector<'a, '_, '_> {
             })));
         };
 
+        self.stickable = Some(self.output.len() - 1);
         self.output.push(spacing(elem.below.get(styles)));
         self.par_situation = ParSituation::Other;
     }
@@ -371,6 +392,7 @@ pub struct LineChild {
     pub frame: Frame,
     pub align: Axes<FixedAlignment>,
     pub need: Abs,
+    pub sticky: bool,
 }
 
 /// A child that encapsulates a prepared unbreakable block.

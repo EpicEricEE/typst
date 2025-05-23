@@ -244,7 +244,7 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
             return Err(Stop::Finish(false));
         }
 
-        self.frame(line.frame.clone(), line.align, false, false)
+        self.frame(line.frame.clone(), line.align, line.sticky, false)
     }
 
     /// Processes an unbreakable block.

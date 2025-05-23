@@ -1,3 +1,5 @@
+use typst_macros::Cast;
+
 use crate::diag::{bail, SourceResult};
 use crate::engine::Engine;
 use crate::foundations::{
@@ -353,8 +355,8 @@ pub struct BlockElem {
     /// = Chapter
     /// #lorem(10)
     /// ```
-    #[default(false)]
-    pub sticky: bool,
+    #[default]
+    pub sticky: Option<Sticky>,
 
     /// The contents of the block.
     #[positional]
@@ -427,6 +429,28 @@ cast! {
         _ => Value::Auto,
     },
     v: Content => Self::Content(v),
+}
+
+#[derive(Debug, Cast, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum Sticky {
+    /// Makes the below content stick to this block.
+    Below,
+    /// Makes this block stick to the above content.
+    Above,
+    /// Makes this block stick to both the above and below content.
+    Both,
+}
+
+impl Sticky {
+    /// Whether this block sticks to the above content.
+    pub fn above(self) -> bool {
+        matches!(self, Self::Above | Self::Both)
+    }
+
+    /// Whether this block sticks to the below content.
+    pub fn below(self) -> bool {
+        matches!(self, Self::Below | Self::Both)
+    }
 }
 
 /// Defines how to size something along an axis.

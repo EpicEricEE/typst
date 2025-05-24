@@ -230,7 +230,15 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
             return Err(Stop::Finish(false));
         }
 
-        self.frame(line.frame.clone(), line.align, line.sticky, false)
+        // If there are only three lines remaining and we are at the start of a
+        // new region, ensure that the lines aren't laid out in a way that
+        // would make the first line alone in its region, while the last two
+        // lines are together in the next region. That is, we rather get a
+        // widow at the end, than a single line in the middle.
+        let sticky = line.sticky
+            || (line.sticky_if_start && self.regions.size == self.regions.base());
+
+        self.frame(line.frame.clone(), line.align, sticky, false)
     }
 
     /// Processes an unbreakable block.

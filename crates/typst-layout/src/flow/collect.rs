@@ -205,6 +205,7 @@ impl<'a> Collector<'a, '_, '_> {
                 frame,
                 align,
                 sticky: (prevent_orphans && i == 0) || (prevent_widows && i + 2 == len),
+                sticky_if_start: prevent_widows && i > 0 && i + 3 == len,
             })));
 
             self.stickable = Some(self.output.len() - 1);
@@ -365,6 +366,7 @@ pub struct LineChild {
     pub frame: Frame,
     pub align: Axes<FixedAlignment>,
     pub sticky: bool,
+    pub sticky_if_start: bool,
 }
 
 /// A child that encapsulates a prepared unbreakable block.

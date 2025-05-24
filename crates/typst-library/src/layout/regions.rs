@@ -107,7 +107,10 @@ impl Regions<'_> {
     /// Whether calling `next()` may improve a situation where there is a lack
     /// of space.
     pub fn may_progress(&self) -> bool {
-        !self.backlog.is_empty() || self.last.is_some_and(|height| self.size.y != height)
+        self.backlog
+            .iter()
+            .chain(self.last.as_ref())
+            .any(|height| !self.size.y.fits(*height))
     }
 
     /// Advance to the next region if there is any.

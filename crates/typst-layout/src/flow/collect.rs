@@ -234,7 +234,7 @@ impl<'a> Collector<'a, '_, '_> {
         self.output.push(spacing(elem.above(styles)));
 
         if let Some(stickable) = self.stickable.and_then(|i| self.output.get_mut(i)) {
-            if sticky.is_some_and(|sticky| sticky.above()) {
+            if sticky.above() {
                 match stickable {
                     Child::Line(line) => line.sticky = true,
                     Child::Single(single) => single.sticky = true,
@@ -244,11 +244,10 @@ impl<'a> Collector<'a, '_, '_> {
             }
         }
 
-        let sticky = sticky.is_some_and(|sticky| sticky.below());
         if !breakable || fr.is_some() {
             self.output.push(Child::Single(self.boxed(SingleChild {
                 align,
-                sticky,
+                sticky: sticky.below(),
                 alone,
                 fr,
                 elem,
@@ -259,7 +258,7 @@ impl<'a> Collector<'a, '_, '_> {
         } else {
             self.output.push(Child::Multi(self.boxed(MultiChild {
                 align,
-                sticky,
+                sticky: sticky.below(),
                 alone,
                 elem,
                 styles,

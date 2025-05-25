@@ -346,27 +346,25 @@ pub struct BlockElem {
     #[default(false)]
     pub clip: bool,
 
-    /// If and how this block must stick to the blocks surrounding it, with no
-    /// break in between.
+    /// If and how this block should stick to its surrounding content.
     ///
-    /// This is, by default, set to "below" on heading blocks to prevent
+    /// This is, by default, set to {"below"} on heading blocks to prevent
     /// orphaned headings at the bottom of the page.
     ///
-    /// ```example
-    /// >>> #set page(height: 140pt)
-    /// // Disable stickiness of headings.
-    /// #show heading: set block(sticky: none)
-    /// #lorem(20)
+    /// If the block should stick to an above paragraph, only the last few
+    /// lines of that paragraph can be pulled, depending on the current
+    /// [costs]($text.costs) for orphans and widows.
     ///
-    /// = Chapter
+    /// ```example
+    /// >>> #set page(height: 100pt)
+    /// // Make lists stick to preceding text.
+    /// #show list: set block(sticky: "above")
+    ///
     /// #lorem(10)
     ///
-    /// #table(
-    /// columns: 2,
-    /// [A], [B],
-    /// [C], [D],
-    /// )
-    /// #block(sticky: "above")[The above table shows that...]
+    /// *Grocery List*
+    /// - Apples
+    /// - Oranges
     /// ```
     #[parse(
         let sticky = args.named("sticky")?;

@@ -435,11 +435,15 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
             // Restore the initial state of all items are migratable.
             self.restore(init);
         } else {
-            // If we ended on a sticky block, but are not yet at the end of
-            // the flow, restore the saved checkpoint to move the sticky
-            // suffix to the next region.
+            // If we ended on a sticky block, but are not yet at the end of the
+            // flow, restore the saved checkpoint to move the sticky suffix to
+            // the next region. However, if part of the sticky block is spilled
+            // into the next region, we can postpone the restoration until the
+            // next region is finalized, as it may not be necessary after all.
             if let Some(snapshot) = self.sticky.take() {
-                self.restore(snapshot)
+                if self.composer.work.spill.is_none() {
+                    self.restore(snapshot)
+                }
             }
         }
 

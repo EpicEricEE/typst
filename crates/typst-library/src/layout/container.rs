@@ -1,4 +1,6 @@
-use crate::diag::{SourceResult, bail};
+use typst_syntax::Spanned;
+
+use crate::diag::{SourceResult, bail, warning};
 use crate::engine::Engine;
 use crate::foundations::{
     Args, AutoValue, Cast, Construct, Content, NativeElement, NoneValue, Packed, Smart, StyleChain,
@@ -366,6 +368,18 @@ pub struct BlockElem {
     /// )
     /// #block(sticky: "above")[The above table shows that...]
     /// ```
+    #[parse(
+        let sticky = args.named("sticky")?;
+        if let Some(Spanned { v: Sticky::Bool(value), span }) = sticky {
+            engine.sink.warn(warning!(
+                span,
+                "`sticky: {}` is deprecated, use `{}` instead",
+                value,
+                if value { "\"below\"" } else { "none" }
+            ));
+        }
+        sticky.map(|s| s.v)
+    )]
     #[default(Sticky::Directional(None))]
     pub sticky: Sticky,
 

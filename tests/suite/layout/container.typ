@@ -220,6 +220,73 @@ C
 #block(sticky: "below", lines(4))
 E
 
+--- block-sticky-above ---
+#set page(height: 60pt)
+A
+#block[B]
+#block(sticky: "above")[C]
+
+--- block-sticky-above-widow ---
+// Ensure that widows are prevented when lines are moved.
+#set page(height: 70pt)
+#lines(4)
+#block(sticky: "above")[E]
+
+--- block-sticky-above-allow-widow ---
+// Ensure that widows are not prevented when explicitly allowed.
+#set page(height: 70pt)
+#set text(costs: (widow: 0%))
+#lines(4)
+#block(sticky: "above")[E]
+
+--- block-sticky-above-widow-orphan ---
+// Ensure that both lines are moved to prevent widow and orphan.
+#set page(height: 60pt)
+A
+
+#lines(2)
+#block(sticky: "above")[C]
+
+--- block-sticky-above-widow-orphan-triplet ---
+// Ensure that all three lines are moved to prevent widow and orphan.
+#set page(height: 80pt)
+A
+
+#lines(3)
+#block(sticky: "above")[D]
+
+--- block-sticky-above-no-space ---
+// Ensure that stickiness is ignored if there is no space.
+#set page(height: 50pt)
+#lines(2)
+#block(sticky: "above")[C]
+
+--- block-sticky-above-many ---
+#set page(height: 80pt)
+#set block(sticky: "above")
+#block[A]
+#block[B]
+#block[C]
+#block[D]
+E
+#block[F]
+#block[G]
+
+--- block-sticky-both ---
+#set page(height: 70pt)
+A
+#block[B]
+#block(sticky: "both")[C]
+#block[D]
+
+--- block-sticky-both-no-space ---
+// Ensure that bottom stickiness is ignored if there is no space for both.
+#set page(height: 50pt)
+A
+#block[B]
+#block(sticky: "both")[C]
+#block[D]
+
 --- box-clip-rect ---
 // Test box clipping with a rectangle
 Hello #box(width: 1em, height: 1em, clip: false)[#rect(width: 3em, height: 3em, fill: red)]

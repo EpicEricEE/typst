@@ -200,6 +200,14 @@ E
 #block[F]
 #block[G]
 
+--- block-sticky-many-unnecessary-movement ---
+#set page(height: 50pt, columns: 2)
+#set block(sticky: true)
+
+#block[A]
+#block[B]
+#block[C]
+
 --- block-sticky-colbreak ---
 A
 #block(sticky: true)[B]

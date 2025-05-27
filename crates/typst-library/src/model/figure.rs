@@ -16,7 +16,7 @@ use crate::introspection::{
 };
 use crate::layout::{
     AlignElem, Alignment, BlockElem, Em, Length, OuterVAlignment, PlacementScope,
-    VAlignment,
+    StickDir, Sticky, VAlignment,
 };
 use crate::model::{Numbering, NumberingPattern, Outlinable, Refable, Supplement};
 use crate::text::{Lang, Region, TextElem};
@@ -443,7 +443,7 @@ impl Outlinable for Packed<FigureElem> {
 ///   caption: [A rectangle],
 /// )
 /// ```
-#[elem(name = "caption", Synthesize)]
+#[elem(name = "caption", Synthesize, ShowSet)]
 pub struct FigureCaption {
     /// The caption's position in the figure. Either `{top}` or `{bottom}`.
     ///
@@ -586,6 +586,20 @@ impl Synthesize for Packed<FigureCaption> {
         let elem = self.as_mut();
         elem.separator.set(Smart::Custom(elem.get_separator(styles)));
         Ok(())
+    }
+}
+
+impl ShowSet for Packed<FigureCaption> {
+    fn show_set(&self, styles: StyleChain) -> Styles {
+        // Make the caption stick with the figure body.
+        let stick_direction = match self.position.get(styles) {
+            OuterVAlignment::Top => StickDir::Below,
+            OuterVAlignment::Bottom => StickDir::Above,
+        };
+
+        let mut map = Styles::new();
+        map.set(BlockElem::sticky, Sticky::Directional(Some(stick_direction)));
+        map
     }
 }
 

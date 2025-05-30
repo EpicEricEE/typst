@@ -701,14 +701,14 @@ impl Balancer {
         }
 
         if *last > max {
-            self.current.0 = guess;
+            self.current.0 = guess.max(max).min(self.current.1);
         } else if *last < max {
-            self.current.1 = guess;
+            self.current.1 = guess.min(max).max(self.current.0);
 
             // Update the best guess.
             let delta = max - *last;
             if self.best_delta.map_or(true, |best| delta <= best) {
-                self.best = Some(guess);
+                self.best = Some(self.current.1);
                 self.best_delta = Some(delta);
             }
         }

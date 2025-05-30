@@ -70,8 +70,7 @@ pub fn layout_fragment(
         locator.track(),
         styles,
         regions,
-        NonZeroUsize::ONE,
-        Rel::zero(),
+        (NonZeroUsize::ONE, Rel::zero(), false),
     )
 }
 
@@ -98,8 +97,7 @@ pub fn layout_columns(
         locator.track(),
         styles,
         regions,
-        elem.count(styles),
-        elem.gutter(styles),
+        (elem.count(styles), elem.gutter(styles), elem.balance(styles)),
     )
 }
 
@@ -117,8 +115,8 @@ fn layout_fragment_impl(
     locator: Tracked<Locator>,
     styles: StyleChain,
     regions: Regions,
-    columns: NonZeroUsize,
-    column_gutter: Rel<Abs>,
+    // TODO: comemo only supports up to 12 arguments (?)
+    columns: (NonZeroUsize, Rel<Abs>, bool),
 ) -> SourceResult<Fragment> {
     if !regions.size.x.is_finite() && regions.expand.x {
         bail!(content.span(), "cannot expand into infinite width");
@@ -158,7 +156,6 @@ fn layout_fragment_impl(
         styles,
         regions,
         columns,
-        column_gutter,
         kind.into(),
     )
 }
@@ -192,12 +189,11 @@ pub fn layout_flow<'a>(
     locator: &mut SplitLocator<'a>,
     shared: StyleChain<'a>,
     mut regions: Regions,
-    columns: NonZeroUsize,
-    column_gutter: Rel<Abs>,
+    columns: (NonZeroUsize, Rel<Abs>, bool),
     mode: FlowMode,
 ) -> SourceResult<Fragment> {
     // Prepare configuration that is shared across the whole flow.
-    let config = configuration(shared, regions, columns, column_gutter, mode);
+    let config = configuration(shared, regions, columns, mode);
 
     // Collect the elements into pre-processed children. These are much easier
     // to handle than the raw elements.
@@ -236,23 +232,22 @@ pub fn layout_flow<'a>(
 fn configuration<'x>(
     shared: StyleChain<'x>,
     regions: Regions,
-    columns: NonZeroUsize,
-    column_gutter: Rel<Abs>,
+    columns: (NonZeroUsize, Rel<Abs>, bool),
     mode: FlowMode,
 ) -> Config<'x> {
     Config {
         mode,
         shared,
         columns: {
-            let mut count = columns.get();
+            let mut count = columns.0.get();
             if !regions.size.x.is_finite() {
                 count = 1;
             }
 
-            let gutter = column_gutter.relative_to(regions.base().x);
+            let gutter = columns.1.relative_to(regions.base().x);
             let width = (regions.size.x - gutter * (count - 1) as f64) / count as f64;
             let dir = TextElem::dir_in(shared);
-            ColumnConfig { count, width, gutter, dir }
+            ColumnConfig { count, width, gutter, dir, balance: columns.2 }
         },
         footnote: FootnoteConfig {
             separator: FootnoteEntry::separator_in(shared),
@@ -387,6 +382,8 @@ struct ColumnConfig {
     /// The horizontal direction in which columns progress. Defined by
     /// `text.dir`.
     dir: Dir,
+    /// Whether the column heights should be balanced.
+    balance: bool,
 }
 
 /// Configuration of line numbers.

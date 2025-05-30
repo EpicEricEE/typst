@@ -179,8 +179,11 @@ fn layout_page_run_impl(
         &mut locator,
         styles,
         Regions::repeat(area, area.map(Abs::is_finite)),
-        PageElem::columns_in(styles),
-        ColumnsElem::gutter_in(styles),
+        (
+            PageElem::columns_in(styles),
+            ColumnsElem::gutter_in(styles),
+            ColumnsElem::balance_in(styles),
+        ),
         FlowMode::Root,
     )?;
 

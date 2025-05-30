@@ -489,6 +489,11 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
             }
         }
 
+        // Keep track of how much space we used in this column.
+        if let Some(balancer) = self.composer.balancer.as_mut() {
+            balancer.heights.push(used.y)
+        }
+
         // Also consider the width of insertions for alignment.
         if !region.expand.x {
             used.x.set_max(self.composer.insertion_width());

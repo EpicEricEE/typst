@@ -1,5 +1,6 @@
 use std::num::NonZeroUsize;
 
+use smallvec::SmallVec;
 use typst_library::diag::SourceResult;
 use typst_library::engine::Engine;
 use typst_library::foundations::{Content, NativeElement, Packed, Resolve, Smart};
@@ -43,6 +44,7 @@ pub fn compose(
         config,
         page_base: regions.base(),
         column: 0,
+        balancer: None,
         page_insertions: Insertions::default(),
         column_insertions: Insertions::default(),
         work,
@@ -64,6 +66,7 @@ pub struct Composer<'a, 'b, 'x, 'y> {
     pub engine: &'x mut Engine<'y>,
     pub work: &'x mut Work<'a, 'b>,
     pub config: &'x Config<'x>,
+    pub balancer: Option<Balancer>,
     column: usize,
     page_base: Size,
     page_insertions: Insertions<'a, 'b>,
@@ -107,16 +110,30 @@ impl<'a, 'b> Composer<'a, 'b, '_, '_> {
     /// Lay out the inner contents of a container/page.
     fn page_contents(&mut self, locator: Locator, regions: Regions) -> FlowResult<Frame> {
         // No point in create column regions, if there's just one!
-        if self.config.columns.count == 1 {
+        let columns = self.config.columns.count;
+        if columns == 1 {
             return self.column(locator, regions);
         }
 
-        // Create a backlog for multi-column layout.
-        let column_height = regions.size.y;
-        let backlog: Vec<_> = std::iter::once(&column_height)
-            .chain(regions.backlog)
-            .flat_map(|&h| std::iter::repeat_n(h, self.config.columns.count))
-            .skip(1)
+        let column_height = match self.balancer.as_ref() {
+            Some(balancer) => balancer.next(),
+            None => regions.size.y,
+        };
+
+        // Set or reset the column balancer. We do this after setting the
+        // column height, so that the first iteration uses the full region.
+        if let Some(balancer) = self.balancer.as_mut() {
+            balancer.heights.clear();
+        } else if self.config.columns.balance {
+            self.balancer = Some(Balancer::new(self.config.columns.count, regions));
+        }
+
+        // Create a backlog for multi-column layout. The last column gets the
+        // the full height to ensure items aren't preemptively moved to the
+        // next page while the columns are being balanced.
+        let backlog: Vec<_> = std::iter::repeat_n(column_height, columns - 2)
+            .chain(std::iter::once(regions.size.y))
+            .chain(regions.backlog.iter().flat_map(|&h| std::iter::repeat_n(h, columns)))
             .collect();
 
         // Subregions for column layout.
@@ -156,6 +173,13 @@ impl<'a, 'b> Composer<'a, 'b, '_, '_> {
 
             output.push_frame(Point::with_x(x), frame);
             inner.next();
+        }
+
+        // Relayout if the columns are not balanced.
+        if let Some(balancer) = self.balancer.as_mut() {
+            if !balancer.balanced(column_height) {
+                return Err(Stop::Relayout(PlacementScope::Parent));
+            }
         }
 
         Ok(output)
@@ -616,6 +640,81 @@ fn layout_footnote(
         }
         fragment
     })
+}
+
+/// State for balancing columns.
+pub struct Balancer {
+    /// The height of each column's content.
+    pub heights: SmallVec<[Abs; 3]>,
+    /// The current lower and upper limit for the best column height.
+    current: (Abs, Abs),
+    /// The column height with the best balance found so far.
+    best: Option<Abs>,
+    /// The difference in height between the tallest and the last column in the
+    /// best balance found so far.
+    best_delta: Option<Abs>,
+}
+
+impl Balancer {
+    /// Create a new balancer for the given number of columns.
+    fn new(count: usize, regions: Regions) -> Self {
+        Self {
+            heights: SmallVec::with_capacity(count),
+            current: (Abs::zero(), regions.size.y),
+            best: None,
+            best_delta: None,
+        }
+    }
+
+    /// The next guess to use as the column height.
+    #[inline]
+    fn next(&self) -> Abs {
+        (self.current.0 + self.current.1) / 2.0
+    }
+
+    /// Whether the columns are balanced with the given height guess.
+    ///
+    /// Columns are considered balanced when the last column is as close to
+    /// the height of the tallest column without being the tallest one itself.
+    fn balanced(&mut self, mut guess: Abs) -> bool {
+        let [rest @ .., last] = self.heights.as_slice() else { unreachable!() };
+        let max = *rest.iter().max().unwrap();
+
+        // If this is the best balance result, we can stop.
+        if last.approx_eq(max) || self.best == Some(self.current.0) {
+            return true;
+        }
+
+        // If the boundaries converge, use the best one we found. The limit
+        // value doesn't necessarily have to be the best one, as we may be on
+        // the wrong side of it, making the last column the tallest one.
+        if self.current.0.approx_eq(self.current.1) {
+            let best = self.best.unwrap_or(self.current.0);
+            self.current = (best, best);
+            return false;
+        }
+
+        // In an unbounded region, all content will go into the first column,
+        // so we can just use the first column's height as the first guess.
+        if !guess.is_finite() {
+            guess = *rest.first().unwrap();
+        }
+
+        if *last > max {
+            self.current.0 = guess;
+        } else if *last < max {
+            self.current.1 = guess;
+
+            // Update the best guess.
+            let delta = max - *last;
+            if self.best_delta.map_or(true, |best| delta <= best) {
+                self.best = Some(guess);
+                self.best_delta = Some(delta);
+            }
+        }
+
+        false
+    }
 }
 
 /// An additive list of insertions.

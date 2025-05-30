@@ -123,6 +123,17 @@ Hallo
   Text
 ]
 
+/*
+  TODO
+  ----
+  - Test normal
+  - Test widow/orphan
+  - Test with fractional content/spaces
+  - Test with unbounded region (auto height)
+  - Test with colbreak
+  - Find some edge cases (?)
+*/
+
 --- colbreak-weak ---
 #set page(columns: 2)
 #colbreak(weak: true)

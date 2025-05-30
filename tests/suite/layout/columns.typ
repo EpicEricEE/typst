@@ -111,6 +111,43 @@ This is a normal page. Very normal.
 #colbreak()
 In flow.
 
+--- columns-balance ---
+// Test basic balancing of columns.
+#set page(columns: 2, height: 120pt)
+#set columns(balance: true)
+#lorem(5)
+
+--- columns-balance-three ---
+#set page(columns: 3, width: 170pt, height: 80pt)
+#set columns(balance: true)
+#lorem(13)
+
+--- columns-balance-orphan-prevention ---
+// Ensure that orphan/widow prevention remains in tact.
+#set page(columns: 2, height: 60pt)
+#set columns(balance: true)
+#lorem(2)
+
+--- columns-balance-fractional ---
+// TODO: This doesn't work well yet with other page heights!
+#set page(columns: 2, height: 125pt)
+#set columns(balance: true)
+#lorem(12)
+#block(height: 1fr, width: 100%, fill: aqua)
+#lorem(4)
+
+--- columns-balance-unbounded ---
+// Test balancing columns in an unbounded region.
+#set page(columns: 2, height: auto)
+#set columns(balance: true)
+#lorem(7)
+
+--- columns-balance-break ---
+#set page(columns: 2)
+#set columns(balance: true)
+// Error: 2-12 column breaks are not allowed when balancing columns
+#colbreak()
+
 --- issue-columns-heading ---
 // The well-known columns bug.
 #set page(height: 70pt)
@@ -122,17 +159,6 @@ Hallo
   = B
   Text
 ]
-
-/*
-  TODO
-  ----
-  - Test normal
-  - Test widow/orphan
-  - Test with fractional content/spaces
-  - Test with unbounded region (auto height)
-  - Test with colbreak
-  - Find some edge cases (?)
-*/
 
 --- colbreak-weak ---
 #set page(columns: 2)

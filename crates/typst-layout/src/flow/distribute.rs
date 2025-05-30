@@ -469,6 +469,12 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
             }
         }
 
+        // Keep track of how much space we used in this column. Fractional
+        // heights are only resolved in the balancer's final iteration.
+        if let Some(balancer) = self.composer.balancer.as_mut() {
+            balancer.heights.push(used.y)
+        }
+
         // When we have fractional spacing, occupy the remaining space with it.
         let mut fr_space = Abs::zero();
         if frs.get() > 0.0 && region.size.y.is_finite() {
@@ -487,11 +493,6 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
                 used.x.set_max(frame.width());
                 fr_frames.push(frame);
             }
-        }
-
-        // Keep track of how much space we used in this column.
-        if let Some(balancer) = self.composer.balancer.as_mut() {
-            balancer.heights.push(used.y)
         }
 
         // Also consider the width of insertions for alignment.

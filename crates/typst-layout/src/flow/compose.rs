@@ -128,11 +128,19 @@ impl<'a, 'b> Composer<'a, 'b, '_, '_> {
             self.balancer = Some(Balancer::new(self.config.columns.count, regions));
         }
 
-        // Create a backlog for multi-column layout. The last column gets the
-        // the full height to ensure items aren't preemptively moved to the
-        // next page while the columns are being balanced.
+        // Create a backlog for multi-column layout. If the balancer is active,
+        // the current upper limit for the ideal column height is used as the
+        // available space for the last column, as the height of the last
+        // column is used to determine whether the columns are balanced. Only
+        // in the final iteration will all columns get the same space, so that
+        // fractional heights are resolved correctly.
+        let last_height = match self.balancer.as_ref() {
+            Some(balancer) if !balancer.done() => regions.size.y,
+            _ => column_height,
+        };
+
         let backlog: Vec<_> = std::iter::repeat_n(column_height, columns - 2)
-            .chain(std::iter::once(regions.size.y))
+            .chain(std::iter::once(last_height))
             .chain(regions.backlog.iter().flat_map(|&h| std::iter::repeat_n(h, columns)))
             .collect();
 
@@ -672,17 +680,28 @@ impl Balancer {
         (self.current.0 + self.current.1) / 2.0
     }
 
+    /// Whether this is the final iteration of the balancer.
+    fn done(&self) -> bool {
+        self.current.0 == self.current.1 && self.best == Some(self.current.0)
+    }
+
     /// Whether the columns are balanced with the given height guess.
     ///
     /// Columns are considered balanced when the last column is as close to
     /// the height of the tallest column without being the tallest one itself.
     fn balanced(&mut self, mut guess: Abs) -> bool {
+        if self.done() {
+            return true;
+        }
+
         let [rest @ .., last] = self.heights.as_slice() else { unreachable!() };
         let max = *rest.iter().max().unwrap();
 
-        // If this is the best balance result, we can stop.
-        if last.approx_eq(max) || self.best == Some(self.current.0) {
-            return true;
+        // If the column heights match perfectly, we can stop.
+        if last.approx_eq(max) {
+            self.current = (guess, guess);
+            self.best = Some(guess);
+            return false;
         }
 
         // If the boundaries converge, use the best one we found. The limit

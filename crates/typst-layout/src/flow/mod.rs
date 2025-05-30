@@ -70,7 +70,7 @@ pub fn layout_fragment(
         locator.track(),
         styles,
         regions,
-        (NonZeroUsize::ONE, Rel::zero(), false),
+        ColumnArgs::single(),
     )
 }
 
@@ -97,7 +97,7 @@ pub fn layout_columns(
         locator.track(),
         styles,
         regions,
-        (elem.count(styles), elem.gutter(styles), elem.balance(styles)),
+        ColumnArgs::from(elem, styles),
     )
 }
 
@@ -115,8 +115,7 @@ fn layout_fragment_impl(
     locator: Tracked<Locator>,
     styles: StyleChain,
     regions: Regions,
-    // TODO: comemo only supports up to 12 arguments (?)
-    columns: (NonZeroUsize, Rel<Abs>, bool),
+    columns: ColumnArgs,
 ) -> SourceResult<Fragment> {
     if !regions.size.x.is_finite() && regions.expand.x {
         bail!(content.span(), "cannot expand into infinite width");
@@ -189,7 +188,7 @@ pub fn layout_flow<'a>(
     locator: &mut SplitLocator<'a>,
     shared: StyleChain<'a>,
     mut regions: Regions,
-    columns: (NonZeroUsize, Rel<Abs>, bool),
+    columns: ColumnArgs,
     mode: FlowMode,
 ) -> SourceResult<Fragment> {
     // Prepare configuration that is shared across the whole flow.
@@ -232,22 +231,22 @@ pub fn layout_flow<'a>(
 fn configuration<'x>(
     shared: StyleChain<'x>,
     regions: Regions,
-    columns: (NonZeroUsize, Rel<Abs>, bool),
+    columns: ColumnArgs,
     mode: FlowMode,
 ) -> Config<'x> {
     Config {
         mode,
         shared,
         columns: {
-            let mut count = columns.0.get();
+            let mut count = columns.count.get();
             if !regions.size.x.is_finite() {
                 count = 1;
             }
 
-            let gutter = columns.1.relative_to(regions.base().x);
+            let gutter = columns.gutter.relative_to(regions.base().x);
             let width = (regions.size.x - gutter * (count - 1) as f64) / count as f64;
             let dir = TextElem::dir_in(shared);
-            ColumnConfig { count, width, gutter, dir, balance: columns.2 }
+            ColumnConfig { count, width, gutter, dir, balance: columns.balance }
         },
         footnote: FootnoteConfig {
             separator: FootnoteEntry::separator_in(shared),
@@ -409,6 +408,46 @@ struct LineNumberConfig {
 /// The `Err(_)` variant incorporate control flow events for finishing and
 /// relayouting regions.
 type FlowResult<T> = Result<T, Stop>;
+
+/// Arguments related to columns bundled together for use in layout functions.
+#[derive(Hash)]
+pub struct ColumnArgs {
+    /// The number of columns.
+    count: NonZeroUsize,
+    /// The gutter size between columns.
+    gutter: Rel<Abs>,
+    /// Whether the column heights should be balanced.
+    balance: bool,
+}
+
+impl ColumnArgs {
+    /// Create column arguments for single column layout.
+    pub fn single() -> Self {
+        Self {
+            count: NonZeroUsize::ONE,
+            gutter: Rel::zero(),
+            balance: false,
+        }
+    }
+
+    /// Create column arguments using the values of the given [ColumnsElem].
+    pub fn from(elem: &Packed<ColumnsElem>, styles: StyleChain) -> Self {
+        Self {
+            count: elem.count(styles),
+            gutter: elem.gutter(styles),
+            balance: elem.balance(styles),
+        }
+    }
+
+    /// Create column arguments using the page styles on the given style chain.
+    pub fn page(styles: StyleChain) -> Self {
+        Self {
+            count: PageElem::columns_in(styles),
+            gutter: ColumnsElem::gutter_in(styles),
+            balance: ColumnsElem::balance_in(styles),
+        }
+    }
+}
 
 /// A control flow event during flow layout.
 enum Stop {

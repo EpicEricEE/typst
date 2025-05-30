@@ -8,9 +8,8 @@ use typst_library::introspection::{
     Counter, CounterDisplayElem, CounterKey, Introspector, Locator, LocatorLink, TagElem,
 };
 use typst_library::layout::{
-    Abs, AlignElem, Alignment, Axes, Binding, ColumnsElem, Dir, Frame, HAlignment,
-    Length, OuterVAlignment, PageElem, Paper, Region, Regions, Rel, Sides, Size,
-    VAlignment,
+    Abs, AlignElem, Alignment, Axes, Binding, Dir, Frame, HAlignment, Length,
+    OuterVAlignment, PageElem, Paper, Region, Regions, Rel, Sides, Size, VAlignment,
 };
 use typst_library::model::Numbering;
 use typst_library::routines::{Pair, Routines};
@@ -19,7 +18,7 @@ use typst_library::visualize::Paint;
 use typst_library::World;
 use typst_utils::Numeric;
 
-use crate::flow::{layout_flow, FlowMode};
+use crate::flow::{layout_flow, ColumnArgs, FlowMode};
 
 /// A mostly finished layout for one page. Needs only knowledge of its exact
 /// page number to be finalized into a `Page`. (Because the margins can depend
@@ -179,11 +178,7 @@ fn layout_page_run_impl(
         &mut locator,
         styles,
         Regions::repeat(area, area.map(Abs::is_finite)),
-        (
-            PageElem::columns_in(styles),
-            ColumnsElem::gutter_in(styles),
-            ColumnsElem::balance_in(styles),
-        ),
+        ColumnArgs::page(styles),
         FlowMode::Root,
     )?;
 

@@ -689,7 +689,7 @@ impl Balancer {
         // value doesn't necessarily have to be the best one, as we may be on
         // the wrong side of it, making the last column the tallest one.
         if self.current.0.approx_eq(self.current.1) {
-            let best = self.best.unwrap_or(self.current.0);
+            let best = *self.best.get_or_insert(self.current.0);
             self.current = (best, best);
             return false;
         }

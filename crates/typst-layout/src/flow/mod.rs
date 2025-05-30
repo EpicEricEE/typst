@@ -204,6 +204,7 @@ pub fn layout_flow<'a>(
         locator.next(&()),
         Size::new(config.columns.width, regions.full),
         regions.expand.x,
+        config.columns.balance,
         mode,
     )?;
 
@@ -246,7 +247,8 @@ fn configuration<'x>(
             let gutter = columns.gutter.relative_to(regions.base().x);
             let width = (regions.size.x - gutter * (count - 1) as f64) / count as f64;
             let dir = TextElem::dir_in(shared);
-            ColumnConfig { count, width, gutter, dir, balance: columns.balance }
+            let balance = columns.balance && count > 1;
+            ColumnConfig { count, width, gutter, dir, balance }
         },
         footnote: FootnoteConfig {
             separator: FootnoteEntry::separator_in(shared),

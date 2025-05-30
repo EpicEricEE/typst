@@ -37,6 +37,7 @@ pub fn collect<'a>(
     locator: Locator<'a>,
     base: Size,
     expand: bool,
+    balance: bool,
     mode: FlowMode,
 ) -> SourceResult<Vec<Child<'a>>> {
     Collector {
@@ -46,6 +47,7 @@ pub fn collect<'a>(
         locator: locator.split(),
         base,
         expand,
+        balance,
         output: Vec::with_capacity(children.len()),
         par_situation: ParSituation::First,
     }
@@ -59,6 +61,7 @@ struct Collector<'a, 'x, 'y> {
     children: &'x [Pair<'a>],
     base: Size,
     expand: bool,
+    balance: bool,
     locator: SplitLocator<'a>,
     output: Vec<Child<'a>>,
     par_situation: ParSituation,
@@ -89,6 +92,12 @@ impl<'a> Collector<'a, '_, '_> {
             } else if child.is::<FlushElem>() {
                 self.output.push(Child::Flush);
             } else if let Some(elem) = child.to_packed::<ColbreakElem>() {
+                if self.balance {
+                    bail!(
+                        child.span(),
+                        "column breaks are not allowed when balancing columns"
+                    );
+                }
                 self.output.push(Child::Break(elem.weak(styles)));
             } else if child.is::<PagebreakElem>() {
                 bail!(

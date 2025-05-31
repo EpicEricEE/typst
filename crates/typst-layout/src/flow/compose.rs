@@ -115,16 +115,7 @@ impl<'a, 'b> Composer<'a, 'b, '_, '_> {
             return self.column(locator, regions);
         }
 
-        let column_height = match self.balancer.as_ref() {
-            Some(balancer) => balancer.next(),
-            None => regions.size.y,
-        };
-
-        // Set or reset the column balancer. We do this after setting the
-        // column height, so that the first iteration uses the full region.
-        if let Some(balancer) = self.balancer.as_mut() {
-            balancer.heights.clear();
-        } else if self.config.columns.balance {
+        if self.config.columns.balance && self.balancer.is_none() {
             self.balancer = Some(Balancer::new(self.config.columns.count, regions));
         }
 
@@ -134,8 +125,13 @@ impl<'a, 'b> Composer<'a, 'b, '_, '_> {
         // column is used to determine whether the columns are balanced. Only
         // in the final iteration will all columns get the same space, so that
         // fractional heights are resolved correctly.
+        let column_height = match self.balancer.as_mut() {
+            Some(balancer) => balancer.next(),
+            None => regions.size.y,
+        };
+
         let last_height = match self.balancer.as_ref() {
-            Some(balancer) if !balancer.done() => regions.size.y,
+            Some(balancer) if !balancer.done => regions.size.y,
             _ => column_height,
         };
 
@@ -185,7 +181,7 @@ impl<'a, 'b> Composer<'a, 'b, '_, '_> {
 
         // Relayout if the columns are not balanced.
         if let Some(balancer) = self.balancer.as_mut() {
-            if !balancer.balanced(column_height) {
+            if !balancer.finished() {
                 return Err(Stop::Relayout(PlacementScope::Parent));
             }
         }
@@ -654,13 +650,14 @@ fn layout_footnote(
 pub struct Balancer {
     /// The height of each column's content.
     pub heights: SmallVec<[Abs; 3]>,
-    /// The current lower and upper limit for the best column height.
-    current: (Abs, Abs),
-    /// The column height with the best balance found so far.
-    best: Option<Abs>,
-    /// The difference in height between the tallest and the last column in the
-    /// best balance found so far.
-    best_delta: Option<Abs>,
+    /// The current guess for the ideal column height.
+    current: Option<Abs>,
+    /// Whether we need to adjust by growing the column height.
+    grow: Option<bool>,
+    /// The full available height of the region.
+    full: Abs,
+    /// Whether the current layout iteration is the final one.
+    done: bool,
 }
 
 impl Balancer {
@@ -668,69 +665,65 @@ impl Balancer {
     fn new(count: usize, regions: Regions) -> Self {
         Self {
             heights: SmallVec::with_capacity(count),
-            current: (Abs::zero(), regions.size.y),
-            best: None,
-            best_delta: None,
+            current: None,
+            grow: None,
+            full: regions.size.y,
+            done: false,
         }
     }
 
     /// The next guess to use as the column height.
-    #[inline]
-    fn next(&self) -> Abs {
-        (self.current.0 + self.current.1) / 2.0
+    fn next(&mut self) -> Abs {
+        self.heights.clear();
+        self.current.unwrap_or(self.full)
     }
 
-    /// Whether this is the final iteration of the balancer.
-    fn done(&self) -> bool {
-        self.current.0 == self.current.1 && self.best == Some(self.current.0)
-    }
-
-    /// Whether the columns are balanced with the given height guess.
-    ///
-    /// Columns are considered balanced when the last column is as close to
-    /// the height of the tallest column without being the tallest one itself.
-    fn balanced(&mut self, mut guess: Abs) -> bool {
-        if self.done() {
+    /// Whether we have completed the final iteration of the balancer.
+    fn finished(&mut self) -> bool {
+        if self.done {
+            // If we were already done before, we can end now.
             return true;
         }
 
         let [rest @ .., last] = self.heights.as_slice() else { unreachable!() };
-        let max = *rest.iter().max().unwrap();
+        let tallest = rest.iter().max().unwrap();
 
-        // If the column heights match perfectly, we can stop.
-        if last.approx_eq(max) {
-            self.current = (guess, guess);
-            self.best = Some(guess);
+        if last.approx_eq(*tallest) {
+            // If the last column is balanced with the rest, we are done.
+            self.done = true;
             return false;
         }
 
-        // If the boundaries converge, use the best one we found. The limit
-        // value doesn't necessarily have to be the best one, as we may be on
-        // the wrong side of it, making the last column the tallest one.
-        if self.current.0.approx_eq(self.current.1) {
-            let best = *self.best.get_or_insert(self.current.0);
-            self.current = (best, best);
-            return false;
+        match self.grow {
+            // If growing, we are done when the last column is the smallest
+            // or when we reached the maximum allowed height.
+            Some(true) if last < tallest || self.current == Some(self.full) => {
+                self.current = Some(*tallest.max(last));
+                self.done = true;
+                return false;
+            },
+
+            // If shrinking, we are done when we have overshot or reached zero
+            // height. The last step is then reverted.
+            Some(false) if last > tallest || self.current == Some(Abs::zero()) => {
+                *self.current.as_mut().unwrap() += Abs::pt(1.0);
+                self.done = true;
+                return false;
+            },
+
+            // If we don't know yet, but have the average case laid out, find
+            // out whether we should grow or shrink.
+            None if self.current.is_some() => self.grow = Some(last > tallest),
+
+            _ => {}
         }
 
-        // In an unbounded region, all content will go into the first column,
-        // so we can just use the first column's height as the first guess.
-        if !guess.is_finite() {
-            guess = *rest.first().unwrap();
-        }
-
-        if *last > max {
-            self.current.0 = guess.max(max).min(self.current.1);
-        } else if *last < max {
-            self.current.1 = guess.min(max).max(self.current.0);
-
-            // Update the best guess.
-            let delta = max - *last;
-            if self.best_delta.map_or(true, |best| delta <= best) {
-                self.best = Some(self.current.1);
-                self.best_delta = Some(delta);
-            }
-        }
+        // Update the current height for the next iteration.
+        self.current = Some(match self.grow {
+            Some(true) => (self.current.unwrap() + Abs::pt(1.0)).min(self.full),
+            Some(false) => (self.current.unwrap() - Abs::pt(1.0)).max(Abs::zero()),
+            None => self.heights.iter().sum::<Abs>() / self.heights.len() as f64,
+        });
 
         false
     }

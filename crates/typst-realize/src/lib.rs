@@ -946,7 +946,7 @@ static PAR: GroupingRule = GroupingRule {
 /// Collects consecutive [`FootnoteElem`]s into [`FootnoteGroup`]s.
 static FOOTNOTES: GroupingRule = GroupingRule {
     priority: 2,
-    tags: false,
+    tags: true,
     trigger: |content, _| content.elem() == FootnoteElem::ELEM,
     inner: |content| content.elem() == SpaceElem::ELEM,
     interrupt: |elem| {
@@ -1071,15 +1071,28 @@ fn finish_footnotes(grouped: Grouped) -> SourceResult<()> {
     let elems = grouped.get();
     let span = select_span(elems);
     let trunk = elems[0].1;
-    let children = elems
+
+    let notes = elems
         .iter()
         .filter_map(|(c, _)| c.to_packed::<FootnoteElem>())
         .cloned()
         .collect();
 
-    // Create and visit the footnote group.
+    let tags = elems
+        .iter()
+        .filter_map(|(c, _)| c.to_packed::<TagElem>())
+        .cloned()
+        .collect::<Vec<_>>();
+
+    // Visit tags before the footnote group, so that all footnotes are detected
+    // when the footnote group's frame is processed in the distributor.
     let s = grouped.end();
-    let elem = FootnoteGroup::new(children).pack().spanned(span);
+    for tag in tags {
+        visit(s, s.store(tag.pack()), trunk).unwrap();
+    }
+
+    // Create and visit the footnote group.
+    let elem = FootnoteGroup::new(notes).pack().spanned(span);
     visit(s, s.store(elem), trunk)
 }
 

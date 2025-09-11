@@ -377,7 +377,7 @@ const QUOTE_RULE: ShowFn<QuoteElem> = |elem, _, styles| {
 
 const FOOTNOTE_GROUP_RULE: ShowFn<FootnoteGroup> = |elem, engine, styles| {
     // TODO: Use `Iterator::intersperse` when stabilized.
-    let separator = TextElem::new(",\u{200B}".into()).pack();
+    let separator = TextElem::new(",\u{2060}".into()).pack();
     let mut notes = Vec::new();
     for (i, note) in elem.children.iter().enumerate() {
         if i != 0 {

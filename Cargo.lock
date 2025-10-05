@@ -995,6 +995,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hayro-svg"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8c673304cec6e0dfd3b4f71fccecd45646899aa70279b62d3f933842abc4ac5"
+dependencies = [
+ "base64",
+ "hayro-interpret",
+ "image",
+ "kurbo 0.12.0",
+ "siphasher",
+ "xmlwriter",
+]
+
+[[package]]
 name = "hayro-syntax"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3281,6 +3295,7 @@ dependencies = [
  "ecow",
  "flate2",
  "hayro",
+ "hayro-svg",
  "image",
  "rustc-hash",
  "ttf-parser",

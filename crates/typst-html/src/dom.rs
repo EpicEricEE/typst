@@ -2,7 +2,7 @@ use std::fmt::{self, Debug, Display, Formatter};
 
 use ecow::{EcoString, EcoVec};
 use typst_library::diag::{HintedStrResult, StrResult, bail};
-use typst_library::foundations::{Dict, Repr, Str, StyleChain, cast};
+use typst_library::foundations::{cast, Dict, Fold, Repr, Str, StyleChain};
 use typst_library::introspection::{Introspector, Location, Tag};
 use typst_library::layout::{Abs, Frame, Point};
 use typst_library::model::DocumentInfo;
@@ -274,6 +274,12 @@ impl HtmlAttrs {
     /// Finds an attribute value.
     pub fn get(&self, attr: HtmlAttr) -> Option<&EcoString> {
         self.0.iter().find(|&&(k, _)| k == attr).map(|(_, v)| v)
+    }
+}
+
+impl Fold for HtmlAttrs {
+    fn fold(self, outer: Self) -> Self {
+        Self(self.0.fold(outer.0))
     }
 }
 

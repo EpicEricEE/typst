@@ -918,6 +918,13 @@ impl<T> Fold for Vec<T> {
     }
 }
 
+impl <T: Clone> Fold for EcoVec<T> {
+    fn fold(self, mut outer: Self) -> Self {
+        outer.extend(self);
+        outer
+    }
+}
+
 impl<T, const N: usize> Fold for SmallVec<[T; N]> {
     fn fold(self, mut outer: Self) -> Self {
         outer.extend(self);

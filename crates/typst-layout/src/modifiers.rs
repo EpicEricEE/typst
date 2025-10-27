@@ -58,7 +58,12 @@ impl FrameModify for Frame {
 
 impl FrameModify for Fragment {
     fn modify(&mut self, modifiers: &FrameModifiers) {
-        for frame in self.iter_mut() {
+        let mut skip_first = false;
+        if let [first, rest @ ..] = self.as_slice() {
+            skip_first = first.is_empty() && rest.iter().any(|frame| !frame.is_empty());
+        }
+
+        for frame in self.iter_mut().skip(if skip_first { 1 } else { 0 }) {
             frame.modify(modifiers);
         }
     }
